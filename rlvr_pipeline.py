@@ -24,7 +24,7 @@ def build_prompt(text: str, industry: str, date: str) -> str:
         f"Date: {date}\n"
         f"Industry: {industry}\n"
         f"Earnings Call Transcript:\n{text}\n\n"
-        "Financial Analysis:\n<think>"
+        "Answer (+1 or -1):"
     )
 
 
@@ -61,10 +61,7 @@ def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int
 
 
 def extract_prediction(text: str) -> str | None:
-    """Extract +1 or -1 from model output, searching after </think> if present."""
-    parts = re.split(r"</think>", text, maxsplit=1)
-    search_in = parts[-1] if len(parts) > 1 else text
-    match = re.search(r"([+-]1)\b", search_in.strip())
+    match = re.search(r"([+-]1)\b", text.strip())
     return match.group(1) if match else None
 
 
