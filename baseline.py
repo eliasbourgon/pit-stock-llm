@@ -86,6 +86,7 @@ def run_inference(
         model=model_name,
         gpu_memory_utilization=gpu_memory_utilization,
         dtype="float16",
+        trust_remote_code=True,
     )
     sampling_params = SamplingParams(
         max_tokens=max_new_tokens,
