@@ -19,7 +19,7 @@ IMAGE="ayushkumartarun/course-cs-552-standard:v1"
 # scratch → datasets + checkpoints (gros fichiers)
 PVC_HOME="home"
 PVC_SCRATCH="sfi-sm-scratch"
-WORKING_DIR="/home/bourgon"
+WORKING_DIR="/workspace"
 
 NUM_GPUS=3
 CPU_CORES=16
@@ -97,7 +97,7 @@ runai submit "${JOB_NAME}" \
   --gpu         "${NUM_GPUS}" \
   --cpu         "${CPU_CORES}" \
   --memory      "${MEMORY}" \
-  --pvc         "${PVC_HOME}:/home/bourgon" \
+  --pvc         "${PVC_HOME}:/workspace" \
   --pvc         "${PVC_SCRATCH}:/scratch" \
   --working-dir "${WORKING_DIR}" \
   --command -- bash -c "${RUN_CMD}"
