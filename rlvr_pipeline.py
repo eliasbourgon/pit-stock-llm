@@ -84,7 +84,7 @@ def reward_fn(completions: list[str], label: list[str], **_) -> list[float]:
 
 
 def train(args: argparse.Namespace) -> None:
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -117,7 +117,6 @@ def train(args: argparse.Namespace) -> None:
         lr_scheduler_type="cosine",
         warmup_ratio=0.05,
         num_generations=args.num_generations,
-        max_prompt_length=args.max_prompt_length,
         max_completion_length=args.max_completion_length,
         temperature=0.9,
         bf16=True,
@@ -134,6 +133,7 @@ def train(args: argparse.Namespace) -> None:
         train_dataset=dataset,
         peft_config=lora_config,
         reward_funcs=reward_fn,
+        model_init_kwargs={"trust_remote_code": True},
     )
 
     trainer.train()
