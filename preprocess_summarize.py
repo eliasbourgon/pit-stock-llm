@@ -25,11 +25,11 @@ from vllm import LLM, SamplingParams
 # CONFIG (defaults — overridable via CLI)
 # ─────────────────────────────────────────────────────────────────────────────
 
-INPUT_PATH        = "sm-calls_with_connectors.parquet"
-OUTPUT_PATH       = "sm-calls_summarized_post2018.parquet"
-CHECKPOINT_PATH   = "sm-calls_summarized_checkpoint.parquet"
-ERROR_LOG_PATH    = "sm-calls_errors.parquet"
-LOG_PATH          = "preprocess_summarize.log"
+INPUT_PATH        = "data/sm-calls_with_connectors.parquet"
+OUTPUT_PATH       = "data/sm-calls_summarized_post2018.parquet"
+CHECKPOINT_PATH   = "data/sm-calls_summarized_checkpoint.parquet"
+ERROR_LOG_PATH    = "data/sm-calls_errors.parquet"
+LOG_PATH          = "data/preprocess_summarize.log"
 
 MODEL_NAME        = "Qwen/Qwen2.5-14B-Instruct"
 DATE_COL          = "mostimportantdateutc"

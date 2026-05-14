@@ -64,8 +64,8 @@ def parse_args() -> argparse.Namespace:
                    help="Skip step 3 — baseline evaluation")
 
     # Paths (overridable)
-    p.add_argument("--raw_parquet",        default="sm-calls_with_connectors.parquet")
-    p.add_argument("--summarized_parquet", default="sm-calls_summarized_post2018.parquet")
+    p.add_argument("--raw_parquet",        default="data/sm-calls_with_connectors.parquet")
+    p.add_argument("--summarized_parquet", default="data/sm-calls_summarized_post2018.parquet")
     p.add_argument("--returns_csv",        default="data/Targets/monthly_crsp.csv")
     p.add_argument("--merged_parquet",     default="data/merged_data.parquet")
     p.add_argument("--baseline_output",    default="baseline_results.csv")
