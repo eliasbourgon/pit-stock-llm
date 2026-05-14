@@ -101,6 +101,9 @@ runai submit "${JOB_NAME}" \
   --memory       "${MEMORY}" \
   --run-as-uid   "${RUN_AS_USER}" \
   --run-as-gid   "${RUN_AS_GROUP}" \
+  -e USER="$(whoami)" \
+  -e LOGNAME="$(whoami)" \
+  -e HOME="/home/bourgon" \
   --pvc          "${PVC_HOME}:/home/bourgon" \
   --pvc          "${PVC_SCRATCH}:/scratch" \
   --working-dir  "${WORKING_DIR}" \
