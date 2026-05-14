@@ -17,10 +17,13 @@ from transformers import AutoTokenizer
 
 # ─── Prompt ───────────────────────────────────────────────────────────────────
 
-def build_prompt(transcript: str) -> str:
+def build_prompt(text: str, industry: str, date: str) -> str:
     # Completion-style prompt for GPT-2 base architecture (no chat template)
+    # Matches baseline.py format exactly for fair comparison
     return (
-        f"Earnings Call Transcript:\n{transcript}\n\n"
+        f"Date: {date}\n"
+        f"Industry: {industry}\n"
+        f"Earnings Call Transcript:\n{text}\n\n"
         "Financial Analysis:\n<think>"
     )
 
@@ -28,21 +31,27 @@ def build_prompt(transcript: str) -> str:
 # ─── Data ─────────────────────────────────────────────────────────────────────
 
 
-def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int) -> Dataset:
+def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int, n_test: int = 0) -> Dataset:
     df = pd.read_parquet(data_path)
 
-    required_cols = {"transcript", "return"}
+    required_cols = {"text", "ret_3M_shifted", "industry", "date"}
     missing = required_cols - set(df.columns)
     if missing:
-        raise ValueError(f"Parquet missing columns: {missing}")
+        raise ValueError(f"Parquet missing columns: {missing}. Run pre_process.py first.")
 
-    df["label"] = df["return"].apply(lambda r: "+1" if r > 0 else "-1")
+    df = df.dropna(subset=["ret_3M_shifted"]).reset_index(drop=True)
+    if n_test > 0:
+        df = df.head(n_test)
+        print(f"[TEST MODE] Using {len(df)} samples")
+
+    df["label"] = df["ret_3M_shifted"].apply(lambda r: "+1" if r > 0 else "-1")
 
     def format_sample(row):
-        transcript = row["transcript"]
-        if len(transcript) > max_prompt_chars:
-            transcript = transcript[:max_prompt_chars] + "\n[truncated]"
-        return {"prompt": build_prompt(transcript), "label": row["label"]}
+        text = row["text"]
+        if len(text) > max_prompt_chars:
+            text = text[:max_prompt_chars] + "\n[truncated]"
+        date_str = row["date"].strftime("%B %Y")
+        return {"prompt": build_prompt(text, row["industry"], date_str), "label": row["label"]}
 
     records = [format_sample(row) for _, row in df.iterrows()]
     return Dataset.from_list(records)
@@ -79,7 +88,11 @@ def train(args: argparse.Namespace) -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    dataset = load_dataset(args.data_path, tokenizer, max_prompt_chars=args.max_prompt_chars)
+    dataset = load_dataset(
+        args.data_path, tokenizer,
+        max_prompt_chars=args.max_prompt_chars,
+        n_test=args.n_test if args.test else 0,
+    )
     print(f"Dataset size: {len(dataset)} samples | label distribution: "
           f"+1={sum(1 for l in dataset['label'] if l=='+1')} "
           f"-1={sum(1 for l in dataset['label'] if l=='-1')}")
@@ -96,6 +109,7 @@ def train(args: argparse.Namespace) -> None:
 
     grpo_config = GRPOConfig(
         output_dir=args.output_dir,
+        max_steps=1 if args.test else -1,
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
@@ -161,6 +175,10 @@ def parse_args() -> argparse.Namespace:
     # LoRA
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
+
+    # Test mode
+    parser.add_argument("--test",   action="store_true", help="Smoke test: 1 training step on --n_test samples")
+    parser.add_argument("--n_test", type=int, default=10)
 
     return parser.parse_args()
 

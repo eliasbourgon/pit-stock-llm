@@ -51,11 +51,13 @@ def extract_prediction(text: str) -> str | None:
 
 # ─── Data ─────────────────────────────────────────────────────────────────────
 
-def load_data(data_path: str, max_prompt_chars: int) -> pd.DataFrame:
+def load_data(data_path: str, max_prompt_chars: int, n_test: int = 0) -> pd.DataFrame:
     df = pd.read_parquet(data_path)
 
-    # Drop the 3 rows with missing return
     df = df.dropna(subset=["ret_3M_shifted"]).reset_index(drop=True)
+    if n_test > 0:
+        df = df.head(n_test)
+        print(f"[TEST MODE] Using {len(df)} samples")
 
     df["label"] = df["ret_3M_shifted"].apply(lambda r: "+1" if r > 0 else "-1")
 
@@ -197,15 +199,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max_new_tokens",          type=int,   default=256)
     p.add_argument("--gpu_memory_utilization",  type=float, default=0.9,
                    help="Fraction of GPU memory vLLM may use (default 0.9)")
-    p.add_argument("--output_csv",              type=str,   default="baseline_results.csv",
+    p.add_argument("--output_csv", type=str, default="baseline_results.csv",
                    help="Path to save per-sample predictions")
+    p.add_argument("--n_test", type=int, default=0,
+                   help="If > 0, only evaluate on first N samples (smoke test)")
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
 
-    df = load_data(args.data_path, args.max_prompt_chars)
+    df = load_data(args.data_path, args.max_prompt_chars, n_test=args.n_test)
     print(f"Loaded {len(df)} samples | +1={sum(df['label']=='+1')} -1={sum(df['label']=='-1')}")
 
     df = run_inference(df, args.model_name, args.max_new_tokens, args.gpu_memory_utilization)

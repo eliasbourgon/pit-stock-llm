@@ -1,20 +1,23 @@
+"""
+pre_process.py
+──────────────
+Merges summarized earnings calls with CRSP returns and maps SIC codes to industries.
+
+Input:
+  --input   : .parquet from preprocess_summarize.py  (must contain ec_summary or text, permno, mostimportantdateutc)
+  --returns : monthly_crsp.csv                        (columns: PERMNO, MthCalDt, MthRet, SICCD)
+  --output  : merged_data.parquet
+
+Output columns: [date, text, industry, ret_3M_shifted]
+  text = ec_summary if present, else original text column
+"""
+
+import argparse
+
 import pandas as pd
 
-earnings_call = pd.read_parquet('data/Predictors/sm-calls_with_connectors.parquet')
-earnings_call['date'] = pd.to_datetime(earnings_call['mostimportantdateutc'], format='%Y-%m-%d').dt.to_period("M")
-earnings_call = earnings_call.sort_values(by=['permno', 'date'])
 
-target = pd.read_csv('data/Targets/monthly_crsp.csv')
-target = target.rename(columns={'PERMNO': 'permno'})
-target['date'] = pd.to_datetime(target['MthCalDt'], format='%Y-%m-%d').dt.to_period("M")
-target = target[['permno', 'date', 'MthRet', 'SICCD']]
-target = target.sort_values(by=['permno', 'date'])
-target['ret_3M_shifted'] = target.groupby('permno')['MthRet'].shift(-4)
-
-merged = pd.merge(earnings_call, target, on=['permno', 'date'], how='left')
-df = merged[['date','text', 'SICCD', 'ret_3M_shifted']]
-
-prefix_to_industry = {
+PREFIX_TO_INDUSTRY = {
     "01": "Agriculture, Forestry & Fishing",
     "02": "Agriculture, Forestry & Fishing",
     "07": "Agriculture, Forestry & Fishing",
@@ -99,15 +102,53 @@ prefix_to_industry = {
     "99": "Public Administration",
 }
 
-def map_sic(sic_code):
+
+def map_sic(sic_code) -> str:
     prefix = str(int(sic_code)).zfill(4)[:2]
-    return prefix_to_industry.get(prefix, "Other / Unclassified")
+    return PREFIX_TO_INDUSTRY.get(prefix, "Other / Unclassified")
 
 
-df["industry"] = df["SICCD"].apply(map_sic)
-df= df.drop(columns=['SICCD'])
+def main(args: argparse.Namespace) -> None:
+    # ── Load earnings calls ───────────────────────────────────────────────────
+    ec = pd.read_parquet(args.input)
+    ec["date"] = pd.to_datetime(ec["mostimportantdateutc"], format="%Y-%m-%d").dt.to_period("M")
+    ec = ec.sort_values(by=["permno", "date"])
+
+    # Use ec_summary (from preprocess_summarize) if available, else fall back to raw text
+    if "ec_summary" in ec.columns:
+        ec = ec.rename(columns={"ec_summary": "text"})
+        print(f"Using 'ec_summary' column as text ({ec['text'].notna().sum()} non-null)")
+    elif "text" not in ec.columns:
+        raise ValueError("Input parquet must have either 'ec_summary' or 'text' column.")
+    else:
+        print("Using raw 'text' column (no ec_summary found)")
+
+    # ── Load returns ──────────────────────────────────────────────────────────
+    target = pd.read_csv(args.returns)
+    target = target.rename(columns={"PERMNO": "permno"})
+    target["date"] = pd.to_datetime(target["MthCalDt"], format="%Y-%m-%d").dt.to_period("M")
+    target = target[["permno", "date", "MthRet", "SICCD"]].sort_values(by=["permno", "date"])
+    target["ret_3M_shifted"] = target.groupby("permno")["MthRet"].shift(-4)
+
+    # ── Merge ─────────────────────────────────────────────────────────────────
+    merged = pd.merge(ec, target, on=["permno", "date"], how="left")
+    merged["industry"] = merged["SICCD"].apply(map_sic)
+
+    df = merged[["date", "text", "industry", "ret_3M_shifted"]]
+
+    # ── Save ──────────────────────────────────────────────────────────────────
+    df.to_parquet(args.output, index=False)
+    print(f"Saved {len(df)} rows to {args.output}")
+    print(f"  ret_3M_shifted non-null: {df['ret_3M_shifted'].notna().sum()} / {len(df)}")
 
 
-df.to_parquet('data/merged_data.parquet', index=False)
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Merge earnings calls with CRSP returns")
+    p.add_argument("--input",   required=True, help="Summarized .parquet (from preprocess_summarize.py)")
+    p.add_argument("--returns", required=True, help="Path to monthly_crsp.csv")
+    p.add_argument("--output",  default="data/merged_data.parquet")
+    return p.parse_args()
 
-print(f"Saved {len(df)} rows to data/merged_data.csv")
+
+if __name__ == "__main__":
+    main(parse_args())

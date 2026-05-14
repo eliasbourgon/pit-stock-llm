@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import logging
+import argparse
 import traceback
 from pathlib import Path
 
@@ -21,7 +22,7 @@ import torch
 from vllm import LLM, SamplingParams
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONFIG
+# CONFIG (defaults — overridable via CLI)
 # ─────────────────────────────────────────────────────────────────────────────
 
 INPUT_PATH        = "sm-calls_with_connectors.parquet"
@@ -133,15 +134,32 @@ def detect_gpu_count() -> int:
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Summarize earnings calls with vLLM")
+    p.add_argument("--input",  default=INPUT_PATH,  help="Input .parquet path")
+    p.add_argument("--output", default=OUTPUT_PATH, help="Output .parquet path")
+    p.add_argument("--test",   action="store_true",  help="Smoke test: process only --n_test rows")
+    p.add_argument("--n_test", type=int, default=10, help="Rows to process in test mode")
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
     t0 = time.time()
 
+    input_path  = args.input
+    output_path = args.output
+
     # ── 1. Chargement & filtre post-2018 ────────────────────────────────────
-    log.info(f"Chargement de {INPUT_PATH} ...")
-    df = pd.read_parquet(INPUT_PATH)
+    log.info(f"Chargement de {input_path} ...")
+    df = pd.read_parquet(input_path)
     df[DATE_COL] = pd.to_datetime(df[DATE_COL])
     df_filtered = df[df[DATE_COL].dt.year > YEAR_FILTER].reset_index(drop=True)
     log.info(f"Lignes après {YEAR_FILTER} : {len(df_filtered):,} / {len(df):,} total")
+
+    if args.test:
+        df_filtered = df_filtered.head(args.n_test).reset_index(drop=True)
+        log.info(f"[TEST MODE] Limité à {len(df_filtered)} lignes")
 
     # ── 2. Résumé depuis checkpoint ──────────────────────────────────────────
     df_done, done_ids = load_checkpoint()
@@ -270,15 +288,15 @@ def main():
         save_errors(df_errors)
 
     # ── 6. Finalisation ───────────────────────────────────────────────────────
-    _finalize(df_done)
+    _finalize(df_done, output_path)
     elapsed_total = (time.time() - t0) / 60
     log.info(f"✓ Terminé en {elapsed_total:.1f} min")
 
 
-def _finalize(df_done: pd.DataFrame) -> None:
+def _finalize(df_done: pd.DataFrame, output_path: str) -> None:
     """Sauvegarde le fichier final et affiche les stats."""
-    df_done.to_parquet(OUTPUT_PATH, index=False)
-    log.info(f"✓ Fichier final sauvegardé : {OUTPUT_PATH}  ({len(df_done):,} lignes)")
+    df_done.to_parquet(output_path, index=False)
+    log.info(f"✓ Fichier final sauvegardé : {output_path}  ({len(df_done):,} lignes)")
 
     if "ec_summary" in df_done.columns:
         lengths = df_done["ec_summary"].dropna().str.len()
