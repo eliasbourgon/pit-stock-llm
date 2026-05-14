@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # ── Paramètres cluster (à adapter) ───────────────────────────────────────────
-PROJECT="RLVR_Earnings_calls"
+PROJECT="sfi-sm-bourgon"
 IMAGE="ayushkumartarun/course-cs-552-standard:v1"
 # home  → code + scripts  (~/pit-stock-llm)
 # scratch → datasets + checkpoints (gros fichiers)
