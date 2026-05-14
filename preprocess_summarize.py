@@ -178,7 +178,7 @@ def main():
 
     # ── 3. Chargement du modèle ──────────────────────────────────────────────
     n_gpus = detect_gpu_count()
-    tensor_parallel = min(n_gpus, 3)   # max 3 A100 disponibles
+    tensor_parallel = max(p for p in range(1, n_gpus + 1) if 40 % p == 0)
 
     log.info(f"Chargement du modèle {MODEL_NAME} (tensor_parallel={tensor_parallel}) ...")
     llm = LLM(
