@@ -31,8 +31,8 @@ MEMORY="40G"
 MODEL_NAME="Diamegs/PIT-4B-FT-201912"    # checkpoint PIT à fine-tuner
 OUTPUT_DIR="checkpoints/pit-2019-rlvr"
 
-RAW_PARQUET="sm-calls_with_connectors.parquet"
-SUMMARIZED_PARQUET="sm-calls_summarized_post2018.parquet"
+RAW_PARQUET="data/Predictors/sm-calls_with_connectors.parquet"
+SUMMARIZED_PARQUET="data/Predictors/sm-calls_summarized_post2018.parquet"
 RETURNS_CSV="data/Targets/monthly_crsp.csv"
 MERGED_PARQUET="data/merged_data.parquet"
 
