@@ -113,8 +113,16 @@ def run_inference(
 # ─── Metrics ──────────────────────────────────────────────────────────────────
 
 def evaluate(df: pd.DataFrame) -> None:
+    print("\n─── Raw outputs (debug) ────────────────────────")
+    for i, row in df.iterrows():
+        print(f"  [{i}] prediction={row['prediction']} | raw: {repr(row['raw_output'][:200])}")
+
     parseable = df[df["prediction"].notna()]
     unparseable = len(df) - len(parseable)
+
+    if len(parseable) == 0:
+        print(f"  No parseable predictions ({unparseable} unparseable). Check raw outputs above.")
+        return
 
     y_true = parseable["label"].tolist()
     y_pred = parseable["prediction"].tolist()
@@ -139,6 +147,9 @@ def evaluate(df: pd.DataFrame) -> None:
 
 def plot_results(df: pd.DataFrame, output_prefix: str) -> None:
     parseable = df[df["prediction"].notna()]
+    if len(parseable) == 0:
+        print("Skipping plots: no parseable predictions.")
+        return
     y_true = parseable["label"].tolist()
     y_pred = parseable["prediction"].tolist()
 
