@@ -69,7 +69,7 @@ else
 fi
 
 # ── Commande exécutée dans le container ──────────────────────────────────────
-RUN_CMD="cd /home/bourgon/pit-stock-llm && pip install -q matplotlib seaborn scikit-learn 'bitsandbytes>=0.43.0' && export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && python submit_job.py \
+RUN_CMD="cd /home/bourgon/pit-stock-llm && pip install -q matplotlib seaborn scikit-learn 'bitsandbytes>=0.43.0' && export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && python -u submit_job.py \
   --model_name ${MODEL_NAME} \
   --output_dir ${OUTPUT_DIR} \
   --raw_parquet ${RAW_PARQUET} \
@@ -104,6 +104,7 @@ runai submit "${JOB_NAME}" \
   -e USER="$(whoami)" \
   -e LOGNAME="$(whoami)" \
   -e HOME="/home/bourgon" \
+  -e PYTHONUNBUFFERED=1 \
   --pvc          "${PVC_HOME}:/home/bourgon" \
   --pvc          "${PVC_SCRATCH}:/scratch" \
   --working-dir  "${WORKING_DIR}" \
