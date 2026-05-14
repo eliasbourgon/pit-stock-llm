@@ -25,7 +25,7 @@ from vllm import LLM, SamplingParams
 # CONFIG (defaults — overridable via CLI)
 # ─────────────────────────────────────────────────────────────────────────────
 
-INPUT_PATH        = "data/sm-calls_with_connectors.parquet"
+INPUT_PATH        = "data/Predictors/sm-calls_with_connectors.parquet"
 OUTPUT_PATH       = "data/sm-calls_summarized_post2018.parquet"
 CHECKPOINT_PATH   = "data/sm-calls_summarized_checkpoint.parquet"
 ERROR_LOG_PATH    = "data/sm-calls_errors.parquet"
