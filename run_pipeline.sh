@@ -97,7 +97,7 @@ runai submit "${JOB_NAME}" \
   --gpu         "${NUM_GPUS}" \
   --cpu         "${CPU_CORES}" \
   --memory      "${MEMORY}" \
-  --pvc         "${PVC_HOME}:/home/bourgon" \
+  --pvc         "${PVC_HOME}:/workspace" \
   --pvc         "${PVC_SCRATCH}:/scratch" \
   --working-dir "${WORKING_DIR}" \
   --command -- bash -c "${RUN_CMD}"
