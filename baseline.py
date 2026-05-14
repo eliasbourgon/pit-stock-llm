@@ -23,7 +23,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
-from vllm import LLM, SamplingParams
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 
 
@@ -80,23 +81,28 @@ def run_inference(
     max_new_tokens: int,
     gpu_memory_utilization: float,
 ) -> pd.DataFrame:
-    print(f"Loading {model_name} with vLLM ...")
+    print(f"Loading {model_name} with HuggingFace Transformers ...")
 
-    llm = LLM(
-        model=model_name,
-        gpu_memory_utilization=gpu_memory_utilization,
-        dtype="float16",
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
         trust_remote_code=True,
+        torch_dtype=torch.float16,
+        device_map="auto",
     )
-    sampling_params = SamplingParams(
-        max_tokens=max_new_tokens,
-        temperature=0,        # greedy for reproducibility
-    )
+    model.eval()
 
-    prompts = df["prompt"].tolist()
-    outputs = llm.generate(prompts, sampling_params)  # vLLM batches internally
-
-    raw_outputs = [out.outputs[0].text for out in outputs]
+    raw_outputs = []
+    for prompt in df["prompt"].tolist():
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        with torch.no_grad():
+            output_ids = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
+        new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
+        raw_outputs.append(tokenizer.decode(new_tokens, skip_special_tokens=True))
 
     df = df.copy()
     df["raw_output"] = raw_outputs
