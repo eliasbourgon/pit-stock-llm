@@ -20,6 +20,8 @@ IMAGE="ayushkumartarun/course-cs-552-standard:v1"
 PVC_HOME="home"
 PVC_SCRATCH="sfi-sm-scratch"
 WORKING_DIR="/tmp"
+RUN_AS_USER=$(id -u)
+RUN_AS_GROUP=$(id -g)
 
 NUM_GPUS=3
 CPU_CORES=16
@@ -92,14 +94,16 @@ echo "Test mode   : ${TEST_FLAG:-non}"
 echo "─────────────────────────────────────────────────────────────────────────"
 
 runai submit "${JOB_NAME}" \
-  --project     "${PROJECT}" \
-  --image       "${IMAGE}" \
-  --gpu         "${NUM_GPUS}" \
-  --cpu         "${CPU_CORES}" \
-  --memory      "${MEMORY}" \
-  --pvc         "${PVC_HOME}:/home/bourgon" \
-  --pvc         "${PVC_SCRATCH}:/scratch" \
-  --working-dir "${WORKING_DIR}" \
+  --project      "${PROJECT}" \
+  --image        "${IMAGE}" \
+  --gpu          "${NUM_GPUS}" \
+  --cpu          "${CPU_CORES}" \
+  --memory       "${MEMORY}" \
+  --run-as-user  "${RUN_AS_USER}" \
+  --run-as-group "${RUN_AS_GROUP}" \
+  --pvc          "${PVC_HOME}:/home/bourgon" \
+  --pvc          "${PVC_SCRATCH}:/scratch" \
+  --working-dir  "${WORKING_DIR}" \
   --command -- bash -c "${RUN_CMD}"
 
 echo ""
