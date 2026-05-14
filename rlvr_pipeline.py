@@ -13,7 +13,7 @@ import pandas as pd
 from datasets import Dataset
 from peft import LoraConfig
 from trl import GRPOConfig, GRPOTrainer
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # ─── Prompt ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +87,7 @@ def train(args: argparse.Namespace) -> None:
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(args.model_name, trust_remote_code=True)
 
     dataset = load_dataset(
         args.data_path, tokenizer,
@@ -115,7 +116,7 @@ def train(args: argparse.Namespace) -> None:
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,
+        warmup_steps=10,
         num_generations=args.num_generations,
         max_completion_length=args.max_completion_length,
         temperature=0.9,
@@ -128,12 +129,11 @@ def train(args: argparse.Namespace) -> None:
     )
 
     trainer = GRPOTrainer(
-        model=args.model_name,
+        model=model,
         args=grpo_config,
         train_dataset=dataset,
         peft_config=lora_config,
         reward_funcs=reward_fn,
-        model_init_kwargs={"trust_remote_code": True},
     )
 
     trainer.train()
