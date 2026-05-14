@@ -69,7 +69,7 @@ else
 fi
 
 # ── Commande exécutée dans le container ──────────────────────────────────────
-RUN_CMD="cd /home/bourgon/pit-stock-llm && python submit_job.py \
+RUN_CMD="cd /home/bourgon/pit-stock-llm && pip install -q matplotlib && python submit_job.py \
   --model_name ${MODEL_NAME} \
   --output_dir ${OUTPUT_DIR} \
   --raw_parquet ${RAW_PARQUET} \
