@@ -134,6 +134,7 @@ def train(args: argparse.Namespace) -> None:
         train_dataset=dataset,
         peft_config=lora_config,
         reward_funcs=reward_fn,
+        processing_class=tokenizer,
     )
 
     trainer.train()
