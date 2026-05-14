@@ -116,6 +116,7 @@ def main(args: argparse.Namespace) -> None:
 
     # Use ec_summary (from preprocess_summarize) if available, else fall back to raw text
     if "ec_summary" in ec.columns:
+        ec = ec.drop(columns=["text"], errors="ignore")
         ec = ec.rename(columns={"ec_summary": "text"})
         print(f"Using 'ec_summary' column as text ({ec['text'].notna().sum()} non-null)")
     elif "text" not in ec.columns:
