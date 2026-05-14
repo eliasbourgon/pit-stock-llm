@@ -26,6 +26,21 @@ Skip steps already done:
 import argparse
 import subprocess
 import sys
+from pathlib import Path
+
+from huggingface_hub import snapshot_download
+
+
+def download_model(model_name: str, model_dir: str) -> str:
+    """Download model from HuggingFace to local dir. Returns the local path."""
+    local_path = Path(model_dir)
+    if local_path.exists() and any(local_path.iterdir()):
+        print(f"[submit_job] Model already at {local_path} — skipping download.")
+        return str(local_path)
+    print(f"[submit_job] Downloading {model_name} → {local_path} ...")
+    snapshot_download(repo_id=model_name, local_dir=str(local_path))
+    print(f"[submit_job] Download complete.")
+    return str(local_path)
 
 
 def run(cmd: list[str], step: str) -> None:
@@ -64,6 +79,8 @@ def parse_args() -> argparse.Namespace:
                    help="Skip step 3 — baseline evaluation")
 
     # Paths (overridable)
+    p.add_argument("--model_dir",          default="models/pit-model",
+                   help="Local dir where the HF model will be downloaded (on PVC)")
     p.add_argument("--raw_parquet",        default="data/sm-calls_with_connectors.parquet")
     p.add_argument("--summarized_parquet", default="data/sm-calls_summarized_post2018.parquet")
     p.add_argument("--returns_csv",        default="data/Targets/monthly_crsp.csv")
@@ -76,6 +93,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     py = sys.executable
+
+    # ── Step 0: Download PIT model from HuggingFace ───────────────────────────
+    local_model = download_model(args.model_name, args.model_dir)
 
     # ── Step 1: Summarize ──────────────────────────────────────────────────────
     if not args.skip_summarize:
@@ -106,7 +126,7 @@ def main() -> None:
     if not args.skip_baseline:
         cmd = [
             py, "baseline.py",
-            "--model_name", args.model_name,
+            "--model_name", local_model,
             "--data_path",  args.merged_parquet,
             "--output_csv", args.baseline_output,
         ]
@@ -119,7 +139,7 @@ def main() -> None:
     # ── Step 4: RLVR fine-tuning ──────────────────────────────────────────────
     cmd = [
         py, "rlvr_pipeline.py",
-        "--model_name", args.model_name,
+        "--model_name", local_model,
         "--data_path",  args.merged_parquet,
         "--output_dir", args.output_dir,
     ]
