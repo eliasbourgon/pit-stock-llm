@@ -19,7 +19,7 @@ IMAGE="ayushkumartarun/course-cs-552-standard:v1"
 # scratch → datasets + checkpoints (gros fichiers)
 PVC_HOME="home"
 PVC_SCRATCH="sfi-sm-scratch"
-WORKING_DIR="/home/bourgon/pit-stock-llm"
+WORKING_DIR="/home/bourgon"
 
 NUM_GPUS=3
 CPU_CORES=16
@@ -67,7 +67,7 @@ else
 fi
 
 # ── Commande exécutée dans le container ──────────────────────────────────────
-RUN_CMD="python submit_job.py \
+RUN_CMD="cd pit-stock-llm && python submit_job.py \
   --model_name ${MODEL_NAME} \
   --output_dir ${OUTPUT_DIR} \
   --raw_parquet ${RAW_PARQUET} \
