@@ -101,6 +101,8 @@ def run_inference(
                 max_new_tokens=max_new_tokens,
                 do_sample=do_sample,
                 temperature=temperature if do_sample else None,
+                top_k=50 if do_sample else None,
+                top_p=0.95 if do_sample else None,
             )
         new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
         raw_outputs.append(tokenizer.decode(new_tokens, skip_special_tokens=True))
