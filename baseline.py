@@ -24,14 +24,23 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria, StoppingCriteriaList
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 
 
 # ─── Prompt ───────────────────────────────────────────────────────────────────
 
+class StopOnEndMarker(StoppingCriteria):
+    def __init__(self, end_ids: list[int]):
+        self.end_ids = end_ids
+        self.n = len(end_ids)
+
+    def __call__(self, input_ids, scores, **_) -> bool:
+        return input_ids[0][-self.n:].tolist() == self.end_ids
+
+
 def build_prompt(text: str, industry: str, date: str) -> str:
-    return (
+    instruction = (
         f"Date: {date}\n"
         f"Industry: {industry}\n"
         f"Earnings Call Transcript:\n{text}\n\n"
@@ -39,6 +48,7 @@ def build_prompt(text: str, industry: str, date: str) -> str:
         "will be positive (+1) or negative (-1).\n"
         "Answer (+1 or -1):"
     )
+    return f"<|user|>\n{instruction}\n<|assistant|>\n"
 
 
 # ─── Prediction extraction ────────────────────────────────────────────────────
@@ -91,7 +101,10 @@ def run_inference(
     )
     model.eval()
 
+    end_ids = tokenizer.encode("<|end|>", add_special_tokens=False)
+    stopping_criteria = StoppingCriteriaList([StopOnEndMarker(end_ids)])
     do_sample = temperature > 0.0
+
     raw_outputs = []
     for prompt in df["prompt"].tolist():
         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
@@ -101,11 +114,13 @@ def run_inference(
                 max_new_tokens=max_new_tokens,
                 do_sample=do_sample,
                 temperature=temperature if do_sample else None,
-                top_k=50 if do_sample else None,
-                top_p=0.95 if do_sample else None,
+                top_p=0.9 if do_sample else None,
+                pad_token_id=tokenizer.eos_token_id,
+                stopping_criteria=stopping_criteria,
             )
         new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
-        raw_outputs.append(tokenizer.decode(new_tokens, skip_special_tokens=True))
+        raw = tokenizer.decode(new_tokens, skip_special_tokens=False)
+        raw_outputs.append(raw.split("<|end|>")[0].strip())
 
     df = df.copy()
     df["raw_output"] = raw_outputs
