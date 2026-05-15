@@ -78,6 +78,7 @@ def run_inference(
     model_name: str,
     max_new_tokens: int,
     gpu_memory_utilization: float,
+    temperature: float = 0.0,
 ) -> pd.DataFrame:
     print(f"Loading {model_name} with HuggingFace Transformers ...")
 
@@ -90,6 +91,7 @@ def run_inference(
     )
     model.eval()
 
+    do_sample = temperature > 0.0
     raw_outputs = []
     for prompt in df["prompt"].tolist():
         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
@@ -97,7 +99,8 @@ def run_inference(
             output_ids = model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-                do_sample=False,
+                do_sample=do_sample,
+                temperature=temperature if do_sample else None,
             )
         new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
         raw_outputs.append(tokenizer.decode(new_tokens, skip_special_tokens=True))
@@ -215,6 +218,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max_new_tokens",          type=int,   default=256)
     p.add_argument("--gpu_memory_utilization",  type=float, default=0.9,
                    help="Fraction of GPU memory vLLM may use (default 0.9)")
+    p.add_argument("--temperature", type=float, default=0.3,
+                   help="Sampling temperature (0.0 = greedy, >0 = stochastic)")
     p.add_argument("--output_csv", type=str, default="baseline_results.csv",
                    help="Path to save per-sample predictions")
     p.add_argument("--n_test", type=int, default=0,
@@ -228,7 +233,7 @@ if __name__ == "__main__":
     df = load_data(args.data_path, args.max_prompt_chars, n_test=args.n_test)
     print(f"Loaded {len(df)} samples | +1={sum(df['label']=='+1')} -1={sum(df['label']=='-1')}")
 
-    df = run_inference(df, args.model_name, args.max_new_tokens, args.gpu_memory_utilization)
+    df = run_inference(df, args.model_name, args.max_new_tokens, args.gpu_memory_utilization, args.temperature)
 
     evaluate(df)
 
