@@ -37,7 +37,7 @@ ID_COL            = "transcriptid"
 TEXT_COL          = "text"
 TEXT_LENGTH_COL   = "text_length"
 
-YEAR_FILTER       = 2018          # strictement après cette année
+YEAR_FILTER       = 2019          # strictement après cette année
 BATCH_SIZE        = 32            # nb de prompts envoyés à vLLM en une fois
 CHECKPOINT_EVERY  = 5             # sauvegarde checkpoint tous les N batches
 MAX_INPUT_CHARS   = 120_000       # ~30k tokens Qwen — tronque si dépassé
