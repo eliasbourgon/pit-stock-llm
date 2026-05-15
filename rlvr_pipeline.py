@@ -6,6 +6,7 @@ Output: +1 / -1 direction prediction (30-day return)
 Method: GRPO (Group Relative Policy Optimization) via TRL
 """
 
+import os
 import re
 import argparse
 import time
@@ -87,8 +88,15 @@ class RewardLogger(TrainerCallback):
     def __init__(self):
         self._start = time.time()
 
+    def on_train_begin(self, _args, state: TrainerState, _control: TrainerControl, **_kwargs):
+        if state.is_local_process_zero and torch.cuda.is_available():
+            for i in range(torch.cuda.device_count()):
+                allocated = torch.cuda.memory_allocated(i) / 1024**3
+                reserved  = torch.cuda.memory_reserved(i)  / 1024**3
+                print(f"[GPU {i}] {allocated:.1f} GB allocated / {reserved:.1f} GB reserved", flush=True)
+
     def on_log(self, _args, state: TrainerState, _control: TrainerControl, logs=None, **_kwargs):
-        if logs is None or state.local_rank != 0:
+        if logs is None or not state.is_local_process_zero:
             return
         elapsed = time.time() - self._start
         step = state.global_step
@@ -108,16 +116,8 @@ class RewardLogger(TrainerCallback):
 # ─── Training ─────────────────────────────────────────────────────────────────
 
 
-def _log_gpu_memory(rank: int) -> None:
-    if not torch.cuda.is_available():
-        return
-    allocated = torch.cuda.memory_allocated(rank) / 1024**3
-    reserved  = torch.cuda.memory_reserved(rank)  / 1024**3
-    print(f"[rank{rank}] GPU memory: {allocated:.1f} GB allocated / {reserved:.1f} GB reserved", flush=True)
-
-
 def train(args: argparse.Namespace) -> None:
-    local_rank = int(torch.distributed.get_rank()) if torch.distributed.is_initialized() else 0
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_main = local_rank == 0
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
@@ -185,8 +185,6 @@ def train(args: argparse.Namespace) -> None:
         total     = sum(p.numel() for p in trainer.model.parameters())
         print(f"LoRA trainable params: {trainable/1e6:.1f}M / {total/1e6:.0f}M "
               f"({100*trainable/total:.2f}%)", flush=True)
-
-    _log_gpu_memory(local_rank)
 
     if is_main:
         print("─" * 70, flush=True)
