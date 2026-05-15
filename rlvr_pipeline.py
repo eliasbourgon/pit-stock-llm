@@ -117,6 +117,7 @@ def train(args: argparse.Namespace) -> None:
         num_generations=args.num_generations,
         max_completion_length=args.max_completion_length,
         temperature=0.9,
+        gradient_checkpointing=False,
         bf16=True,
         logging_steps=10,
         save_steps=args.save_steps,
