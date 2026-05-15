@@ -86,7 +86,7 @@ def run_inference(
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
-        torch_dtype=torch.float16,
+        dtype=torch.bfloat16,
         device_map="auto",
     )
     model.eval()
