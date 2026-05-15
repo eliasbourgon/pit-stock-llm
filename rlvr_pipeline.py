@@ -8,12 +8,14 @@ Method: GRPO (Group Relative Policy Optimization) via TRL
 
 import re
 import argparse
+import time
 
+import torch
 import pandas as pd
 from datasets import Dataset
 from peft import LoraConfig
 from trl import GRPOConfig, GRPOTrainer
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, TrainerCallback, TrainerState, TrainerControl
 
 # ─── Prompt ───────────────────────────────────────────────────────────────────
 
@@ -78,23 +80,64 @@ def reward_fn(completions: list[str], label: list[str], **_) -> list[float]:
     return rewards
 
 
+# ─── Logging callback ─────────────────────────────────────────────────────────
+
+
+class RewardLogger(TrainerCallback):
+    def __init__(self):
+        self._start = time.time()
+
+    def on_log(self, _args, state: TrainerState, _control: TrainerControl, logs=None, **_kwargs):
+        if logs is None or state.local_rank != 0:
+            return
+        elapsed = time.time() - self._start
+        step = state.global_step
+        reward     = logs.get("reward", float("nan"))
+        reward_std = logs.get("reward_std", float("nan"))
+        loss       = logs.get("loss", float("nan"))
+        kl         = logs.get("kl", float("nan"))
+        lr         = logs.get("learning_rate", float("nan"))
+        print(
+            f"[step {step:>5} | {elapsed:6.0f}s] "
+            f"reward={reward:+.3f} ± {reward_std:.3f}  "
+            f"loss={loss:.4f}  kl={kl:.4f}  lr={lr:.2e}",
+            flush=True,
+        )
+
+
 # ─── Training ─────────────────────────────────────────────────────────────────
 
 
+def _log_gpu_memory(rank: int) -> None:
+    if not torch.cuda.is_available():
+        return
+    allocated = torch.cuda.memory_allocated(rank) / 1024**3
+    reserved  = torch.cuda.memory_reserved(rank)  / 1024**3
+    print(f"[rank{rank}] GPU memory: {allocated:.1f} GB allocated / {reserved:.1f} GB reserved", flush=True)
+
+
 def train(args: argparse.Namespace) -> None:
+    local_rank = int(torch.distributed.get_rank()) if torch.distributed.is_initialized() else 0
+    is_main = local_rank == 0
+
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(args.model_name, trust_remote_code=True)
+
+    if is_main:
+        total  = sum(p.numel() for p in model.parameters())
+        print(f"Model loaded: {total/1e9:.2f}B parameters", flush=True)
 
     dataset = load_dataset(
         args.data_path, tokenizer,
         max_prompt_chars=args.max_prompt_chars,
         n_test=args.n_test if args.test else 0,
     )
-    print(f"Dataset size: {len(dataset)} samples | label distribution: "
-          f"+1={sum(1 for l in dataset['label'] if l=='+1')} "
-          f"-1={sum(1 for l in dataset['label'] if l=='-1')}")
+    if is_main:
+        print(f"Dataset size: {len(dataset)} samples | label distribution: "
+              f"+1={sum(1 for l in dataset['label'] if l=='+1')} "
+              f"-1={sum(1 for l in dataset['label'] if l=='-1')}", flush=True)
 
     lora_config = LoraConfig(
         r=args.lora_r,
@@ -134,12 +177,28 @@ def train(args: argparse.Namespace) -> None:
         peft_config=lora_config,
         reward_funcs=reward_fn,
         processing_class=tokenizer,
+        callbacks=[RewardLogger()],
     )
+
+    if is_main:
+        trainable = sum(p.numel() for p in trainer.model.parameters() if p.requires_grad)
+        total     = sum(p.numel() for p in trainer.model.parameters())
+        print(f"LoRA trainable params: {trainable/1e6:.1f}M / {total/1e6:.0f}M "
+              f"({100*trainable/total:.2f}%)", flush=True)
+
+    _log_gpu_memory(local_rank)
+
+    if is_main:
+        print("─" * 70, flush=True)
+        print("Starting GRPO training...", flush=True)
+        print("─" * 70, flush=True)
 
     trainer.train()
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
-    print(f"Model saved to {args.output_dir}")
+
+    if is_main:
+        print(f"Model saved to {args.output_dir}", flush=True)
 
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
