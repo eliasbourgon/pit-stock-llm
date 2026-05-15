@@ -18,14 +18,15 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 # ─── Prompt ───────────────────────────────────────────────────────────────────
 
 def build_prompt(text: str, industry: str, date: str) -> str:
-    # Completion-style prompt for GPT-2 base architecture (no chat template)
-    # Matches baseline.py format exactly for fair comparison
-    return (
+    instruction = (
         f"Date: {date}\n"
         f"Industry: {industry}\n"
         f"Earnings Call Transcript:\n{text}\n\n"
+        "Based on this earnings call, predict whether the stock's 1-month return "
+        "will be positive (+1) or negative (-1).\n"
         "Answer (+1 or -1):"
     )
+    return f"<|user|>\n{instruction}\n<|assistant|>\n"
 
 
 # ─── Data ─────────────────────────────────────────────────────────────────────
@@ -61,8 +62,8 @@ def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int
 
 
 def extract_prediction(text: str) -> str | None:
-    match = re.search(r"([+-]1)\b", text.strip())
-    return match.group(1) if match else None
+    matches = re.findall(r"([+-]1)\b", text.strip())
+    return matches[-1] if matches else None
 
 
 def reward_fn(completions: list[str], label: list[str], **_) -> list[float]:

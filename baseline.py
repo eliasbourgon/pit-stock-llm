@@ -54,8 +54,8 @@ def build_prompt(text: str, industry: str, date: str) -> str:
 # ─── Prediction extraction ────────────────────────────────────────────────────
 
 def extract_prediction(text: str) -> str | None:
-    match = re.search(r"([+-]1)\b", text.strip())
-    return match.group(1) if match else None
+    matches = re.findall(r"([+-]1)\b", text.strip())
+    return matches[-1] if matches else None
 
 
 # ─── Data ─────────────────────────────────────────────────────────────────────
