@@ -15,7 +15,7 @@ PROJECT="sfi-sm-bourgon"
 IMAGE="ayushkumartarun/course-cs-552-standard:v1"
 PVC_HOME="home"
 PVC_SCRATCH="sfi-sm-scratch"
-NUM_GPUS=3
+NUM_GPUS=1
 CPU_CORES=16
 MEMORY="40G"
 
@@ -43,7 +43,7 @@ JOB_NAME="pit-rlvr${TEST_FLAG:+-test}-${TIMESTAMP}"
 RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   pip install -q --upgrade trl peft bitsandbytes && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  accelerate launch --num_processes ${NUM_GPUS} --multi_gpu rlvr_pipeline.py \
+  CUDA_VISIBLE_DEVICES=0 python -u rlvr_pipeline.py \
   --model_name ${MODEL_NAME} \
   --data_path  ${DATA_PATH} \
   --output_dir ${OUTPUT_DIR}"
