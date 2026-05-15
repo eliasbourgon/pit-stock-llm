@@ -6,7 +6,6 @@ Output: +1 / -1 direction prediction (30-day return)
 Method: GRPO (Group Relative Policy Optimization) via TRL
 """
 
-import os
 import re
 import argparse
 import time
@@ -117,9 +116,7 @@ class RewardLogger(TrainerCallback):
 
 
 def train(args: argparse.Namespace) -> None:
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    is_main = local_rank == 0
-
+    is_main = True
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -161,7 +158,6 @@ def train(args: argparse.Namespace) -> None:
         max_completion_length=args.max_completion_length,
         temperature=0.9,
         gradient_checkpointing=False,
-        ddp_find_unused_parameters=False,
         bf16=True,
         logging_steps=10,
         save_steps=args.save_steps,
