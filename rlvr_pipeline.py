@@ -96,11 +96,10 @@ def train(args: argparse.Namespace) -> None:
           f"+1={sum(1 for l in dataset['label'] if l=='+1')} "
           f"-1={sum(1 for l in dataset['label'] if l=='-1')}")
 
-    # GPT-2 architecture: combined QKV projection (c_attn), output (c_proj), MLP (c_fc)
     lora_config = LoraConfig(
         r=args.lora_r,
         lora_alpha=args.lora_alpha,
-        target_modules=["c_attn", "c_proj", "c_fc"],
+        target_modules="all-linear",
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
