@@ -1,10 +1,11 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# run_summarize.sh  —  Step 1: summarize earnings calls with vLLM
+# run_rlvr.sh  —  Step 4: GRPO fine-tuning
 #
 # Usage:
-#   bash run_summarize.sh              # run complet
-#   bash run_summarize.sh --test       # smoke test (10 samples)
+#   bash run_rlvr.sh                              # run complet
+#   bash run_rlvr.sh --test                       # smoke test (10 samples, 1 step)
+#   bash run_rlvr.sh --model=Diamegs/PIT-4B-FT-201312 --output=checkpoints/pit-2013
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -18,9 +19,10 @@ NUM_GPUS=3
 CPU_CORES=16
 MEMORY="40G"
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-INPUT="data/Predictors/sm-calls_with_connectors.parquet"
-OUTPUT="data/Predictors/sm-calls_summarized_post2018.parquet"
+# ── Params ────────────────────────────────────────────────────────────────────
+MODEL_NAME="Diamegs/PIT-4B-FT-201912"
+OUTPUT_DIR="checkpoints/pit-2019-rlvr"
+DATA_PATH="data/merged_data.parquet"
 
 # ── Args ──────────────────────────────────────────────────────────────────────
 TEST_FLAG=""
@@ -29,21 +31,28 @@ for arg in "$@"; do
   case $arg in
     --test)      TEST_FLAG="--test" ;;
     --n-test=*)  N_TEST="${arg#*=}" ;;
-    *) echo "Usage: bash run_summarize.sh [--test] [--n-test=N]"; exit 1 ;;
+    --model=*)   MODEL_NAME="${arg#*=}" ;;
+    --output=*)  OUTPUT_DIR="${arg#*=}" ;;
+    *) echo "Usage: bash run_rlvr.sh [--test] [--n-test=N] [--model=...] [--output=...]"; exit 1 ;;
   esac
 done
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-JOB_NAME="pit-summarize${TEST_FLAG:+-test}-${TIMESTAMP}"
+JOB_NAME="pit-rlvr${TEST_FLAG:+-test}-${TIMESTAMP}"
 
-RUN_CMD="cd /home/bourgon/pit-stock-llm && python -u preprocess_summarize.py \
-  --input  ${INPUT} \
-  --output ${OUTPUT} \
-  ${TEST_FLAG}"
-[ -n "$TEST_FLAG" ] && RUN_CMD="${RUN_CMD} --n_test ${N_TEST}"
+RUN_CMD="cd /home/bourgon/pit-stock-llm && \
+  pip install -q 'trl>=0.8.0' peft 'bitsandbytes>=0.43.0' && \
+  export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
+  python -u rlvr_pipeline.py \
+  --model_name ${MODEL_NAME} \
+  --data_path  ${DATA_PATH} \
+  --output_dir ${OUTPUT_DIR}"
+[ -n "$TEST_FLAG" ] && RUN_CMD="${RUN_CMD} --test --n_test ${N_TEST}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo "Job    : ${JOB_NAME}"
+echo "Modèle : ${MODEL_NAME}"
+echo "Output : ${OUTPUT_DIR}"
 echo "Test   : ${TEST_FLAG:-non}"
 echo "─────────────────────────────────────────────────────────────────────────"
 

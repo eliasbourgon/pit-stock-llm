@@ -1,10 +1,9 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# run_summarize.sh  —  Step 1: summarize earnings calls with vLLM
+# run_preprocess.sh  —  Step 2: merge earnings calls with CRSP returns
 #
 # Usage:
-#   bash run_summarize.sh              # run complet
-#   bash run_summarize.sh --test       # smoke test (10 samples)
+#   bash run_preprocess.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -14,37 +13,25 @@ PROJECT="sfi-sm-bourgon"
 IMAGE="ayushkumartarun/course-cs-552-standard:v1"
 PVC_HOME="home"
 PVC_SCRATCH="sfi-sm-scratch"
-NUM_GPUS=3
-CPU_CORES=16
-MEMORY="40G"
+NUM_GPUS=0
+CPU_CORES=8
+MEMORY="16G"
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-INPUT="data/Predictors/sm-calls_with_connectors.parquet"
-OUTPUT="data/Predictors/sm-calls_summarized_post2018.parquet"
-
-# ── Args ──────────────────────────────────────────────────────────────────────
-TEST_FLAG=""
-N_TEST=10
-for arg in "$@"; do
-  case $arg in
-    --test)      TEST_FLAG="--test" ;;
-    --n-test=*)  N_TEST="${arg#*=}" ;;
-    *) echo "Usage: bash run_summarize.sh [--test] [--n-test=N]"; exit 1 ;;
-  esac
-done
-
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-JOB_NAME="pit-summarize${TEST_FLAG:+-test}-${TIMESTAMP}"
-
-RUN_CMD="cd /home/bourgon/pit-stock-llm && python -u preprocess_summarize.py \
-  --input  ${INPUT} \
-  --output ${OUTPUT} \
-  ${TEST_FLAG}"
-[ -n "$TEST_FLAG" ] && RUN_CMD="${RUN_CMD} --n_test ${N_TEST}"
+INPUT="data/Predictors/sm-calls_summarized_post2018.parquet"
+RETURNS="data/Targets/monthly_crsp.csv"
+OUTPUT="data/merged_data.parquet"
 
 # ─────────────────────────────────────────────────────────────────────────────
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+JOB_NAME="pit-preprocess-${TIMESTAMP}"
+
+RUN_CMD="cd /home/bourgon/pit-stock-llm && python -u pre_process.py \
+  --input   ${INPUT} \
+  --returns ${RETURNS} \
+  --output  ${OUTPUT}"
+
 echo "Job    : ${JOB_NAME}"
-echo "Test   : ${TEST_FLAG:-non}"
 echo "─────────────────────────────────────────────────────────────────────────"
 
 runai submit "${JOB_NAME}" \
