@@ -74,7 +74,7 @@ def load_data(data_path: str, max_prompt_chars: int, n_test: int = 0) -> pd.Data
         t = row["text"]
         if len(t) > max_prompt_chars:
             t = t[:max_prompt_chars] + "\n[truncated]"
-        date_str = row["date"].strftime("%B %Y")  # e.g. "November 2011"
+        date_str = pd.Period(row["date"]).strftime("%B %Y")  # e.g. "November 2011"
         return build_prompt(t, row["industry"], date_str)
 
     df["prompt"] = df.apply(make_prompt, axis=1)

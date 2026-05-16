@@ -110,7 +110,7 @@ def map_sic(sic_code) -> str:
 
 def main(args: argparse.Namespace) -> None:
     # ── Load earnings calls ───────────────────────────────────────────────────
-    ec = pd.read_parquet(args.input)
+    ec = pd.read_parquet(args.input, engine='fastparquet')
     ec["date"] = pd.to_datetime(ec["mostimportantdateutc"], format="%Y-%m-%d").dt.to_period("M")
     ec = ec.sort_values(by=["permno", "date"])
 
@@ -135,7 +135,8 @@ def main(args: argparse.Namespace) -> None:
     merged = pd.merge(ec, target, on=["permno", "date"], how="left")
     merged["industry"] = merged["SICCD"].apply(map_sic)
 
-    df = merged[["date", "text", "industry", "ret_3M_shifted"]]
+    df = merged[["date", "text", "industry", "ret_3M_shifted"]].copy()
+    df["date"] = df["date"].astype(str)  # "2020-11" — avoids period[M] parquet issues
 
     # ── Save ──────────────────────────────────────────────────────────────────
     df.to_parquet(args.output, index=False)
