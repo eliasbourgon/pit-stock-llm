@@ -53,7 +53,7 @@ def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int
         text = row["text"]
         if len(text) > max_prompt_chars:
             text = text[:max_prompt_chars] + "\n[truncated]"
-        date_str = row["date"].strftime("%B %Y")
+        date_str = pd.Period(row["date"]).strftime("%B %Y")
         return {"prompt": build_prompt(text, row["industry"], date_str), "label": row["label"]}
 
     records = [format_sample(row) for _, row in df.iterrows()]
