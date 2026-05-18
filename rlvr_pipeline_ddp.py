@@ -82,16 +82,19 @@ def reward_fn(completions: list[str], label: list[str], **_) -> list[float]:
 
 
 class RewardLogger(TrainerCallback):
-    def __init__(self, world_size: int):
+    def __init__(self, rank: int, world_size: int):
         self._start = time.time()
+        self._rank = rank
         self._world_size = world_size
 
     def on_train_begin(self, _args, state: TrainerState, _control: TrainerControl, **_kwargs):
-        if state.is_local_process_zero and torch.cuda.is_available():
-            for i in range(torch.cuda.device_count()):
-                allocated = torch.cuda.memory_allocated(i) / 1024**3
-                reserved  = torch.cuda.memory_reserved(i)  / 1024**3
-                print(f"[GPU {i}] {allocated:.1f} GB allocated / {reserved:.1f} GB reserved", flush=True)
+        # Each rank logs its own GPU — torch.cuda.memory_allocated(i) only sees
+        # memory allocated by the current process, so rank 0 cannot report other GPUs.
+        if torch.cuda.is_available():
+            device = torch.cuda.current_device()
+            allocated = torch.cuda.memory_allocated(device) / 1024**3
+            reserved  = torch.cuda.memory_reserved(device)  / 1024**3
+            print(f"[rank {self._rank} / GPU {device}] {allocated:.1f} GB allocated / {reserved:.1f} GB reserved", flush=True)
 
     def on_log(self, _args, state: TrainerState, _control: TrainerControl, logs=None, **_kwargs):
         if logs is None or not state.is_local_process_zero:
@@ -212,7 +215,7 @@ def train(args: argparse.Namespace) -> None:
         peft_config=lora_config,
         reward_funcs=reward_fn,
         processing_class=tokenizer,
-        callbacks=[RewardLogger(ddp_world_size)],
+        callbacks=[RewardLogger(ddp_rank, ddp_world_size)],
     )
 
     if master_process:
