@@ -40,13 +40,10 @@ done
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 JOB_NAME="pit-rlvr-fast${TEST_FLAG:+-test}-${TIMESTAMP}"
 
-# ── Install flash-attn first, then run ───────────────────────────────────────
-# flash-attn is required for attn_implementation='flash_attention_2'.
-# If installation fails (CUDA/driver mismatch), remove attn_implementation
-# from rlvr_pipeline_fast.py and re-submit — all other optimizations still apply.
+# PITForCausalLM is a custom architecture that does not support Flash Attention 2,
+# so flash-attn is not installed. Speedups come from bf16 loading, TF32, and cuDNN.
 RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   pip install -q --upgrade trl peft bitsandbytes && \
-  pip install -q flash-attn --no-build-isolation && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
   CUDA_VISIBLE_DEVICES=0 python -u rlvr_pipeline_fast.py \
   --model_name ${MODEL_NAME} \

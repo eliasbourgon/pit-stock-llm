@@ -135,11 +135,10 @@ def train(args: argparse.Namespace) -> None:
         tokenizer.pad_token = tokenizer.eos_token
 
     # Load in bfloat16: halves VRAM vs fp32, enables faster bf16 matmuls
-    # Flash Attention 2: O(n) memory vs O(n²), 2-4x faster on long sequences
+    # Flash Attention 2 not used: PITForCausalLM custom architecture doesn't support it
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
-        torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        dtype=torch.bfloat16,
         trust_remote_code=True,
     )
     
