@@ -45,7 +45,6 @@ JOB_NAME="pit-rlvr-fast${TEST_FLAG:+-test}-${TIMESTAMP}"
 RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   pip install -q --upgrade trl peft bitsandbytes && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  export TRITON_CACHE_DIR=/scratch/triton_cache && \
   CUDA_VISIBLE_DEVICES=0 python -u rlvr_pipeline_fast.py \
   --model_name ${MODEL_NAME} \
   --data_path  ${DATA_PATH} \
