@@ -45,7 +45,6 @@ JOB_NAME="pit-rlvr-ddp${TEST_FLAG:+-test}-${TIMESTAMP}"
 RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   pip install -q --upgrade trl peft bitsandbytes && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  export TRITON_CACHE_DIR=/scratch/triton_cache && \
   torchrun --nproc_per_node=${NUM_GPUS} --master_port=29500 rlvr_pipeline_ddp.py \
   --model_name ${MODEL_NAME} \
   --data_path  ${DATA_PATH} \
