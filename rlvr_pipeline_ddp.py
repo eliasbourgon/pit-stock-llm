@@ -195,7 +195,7 @@ def train(args: argparse.Namespace) -> None:
         temperature=0.9,
         gradient_checkpointing=False,
         bf16=True,
-        logging_steps=10,
+        logging_steps=1,
         save_steps=args.save_steps,
         save_total_limit=3,
         remove_unused_columns=False,
