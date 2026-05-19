@@ -372,7 +372,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int,   default=1)
     parser.add_argument("--grad_accum", type=int,   default=8)
     parser.add_argument("--lr",         type=float, default=5e-6)
-    parser.add_argument("--save_steps", type=int,   default=100)
+    parser.add_argument("--save_steps", type=int,   default=500)
 
     # LoRA
     parser.add_argument("--lora_r",     type=int, default=16)
