@@ -3,3 +3,4 @@ sm-calls_with_connectors.parquet
 .ipynb_checkpoints/
 .DS_Store
 .claude/
+.env

@@ -13,6 +13,7 @@ import time
 import torch
 import torch.distributed as dist
 import pandas as pd
+import wandb
 from datasets import Dataset
 from peft import LoraConfig
 from trl import GRPOConfig, GRPOTrainer
@@ -45,6 +46,10 @@ def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int
         raise ValueError(f"Parquet missing columns: {missing}. Run pre_process.py first.")
 
     df = df.dropna(subset=["ret_3M_shifted"]).reset_index(drop=True)
+
+    # ── Cap dataset to 1000 training samples ──────────────────────────────────
+    df = df.head(1000)
+
     if n_test > 0:
         df = df.head(n_test)
         print(f"[TEST MODE] Using {len(df)} samples")
@@ -82,37 +87,103 @@ def reward_fn(completions: list[str], label: list[str], **_) -> list[float]:
 
 
 class RewardLogger(TrainerCallback):
-    def __init__(self, rank: int, world_size: int):
-        self._start = time.time()
-        self._rank = rank
-        self._world_size = world_size
+    def __init__(self, rank: int, world_size: int, use_wandb: bool):
+        self._start           = time.time()
+        self._rank            = rank
+        self._world_size      = world_size
+        self._use_wandb       = use_wandb
+        self._step_times: list[float] = []
+        self._last_step_time  = time.time()
 
     def on_train_begin(self, _args, state: TrainerState, _control: TrainerControl, **_kwargs):
-        # Each rank logs its own GPU — torch.cuda.memory_allocated(i) only sees
-        # memory allocated by the current process, so rank 0 cannot report other GPUs.
         if torch.cuda.is_available():
-            device = torch.cuda.current_device()
+            device    = torch.cuda.current_device()
             allocated = torch.cuda.memory_allocated(device) / 1024**3
             reserved  = torch.cuda.memory_reserved(device)  / 1024**3
-            print(f"[rank {self._rank} / GPU {device}] {allocated:.1f} GB allocated / {reserved:.1f} GB reserved", flush=True)
+            print(
+                f"[rank {self._rank} / GPU {device}] "
+                f"{allocated:.1f} GB allocated / {reserved:.1f} GB reserved",
+                flush=True,
+            )
+            if self._use_wandb and state.is_local_process_zero:
+                wandb.log({
+                    f"system/gpu{device}_allocated_gb": allocated,
+                    f"system/gpu{device}_reserved_gb":  reserved,
+                }, step=0)
 
     def on_log(self, _args, state: TrainerState, _control: TrainerControl, logs=None, **_kwargs):
         if logs is None or not state.is_local_process_zero:
             return
-        elapsed = time.time() - self._start
+
+        now      = time.time()
+        elapsed  = now - self._start
+        step_dur = now - self._last_step_time
+        self._last_step_time = now
+        self._step_times.append(step_dur)
+
         step       = state.global_step
-        reward     = logs.get("reward", float("nan"))
-        reward_std = logs.get("reward_std", float("nan"))
-        loss       = logs.get("loss", float("nan"))
-        kl         = logs.get("kl", float("nan"))
+        reward     = logs.get("reward",        float("nan"))
+        reward_std = logs.get("reward_std",    float("nan"))
+        loss       = logs.get("loss",          float("nan"))
+        kl         = logs.get("kl",            float("nan"))
         lr         = logs.get("learning_rate", float("nan"))
+
+        # Accuracy proxy: reward in [-1, 1] → accuracy in [0, 1]
+        accuracy      = (reward + 1.0) / 2.0
+        avg_step_time = sum(self._step_times) / len(self._step_times)
+
+        # GPU memory (this rank's GPU only)
+        gpu_allocated_gb = float("nan")
+        gpu_reserved_gb  = float("nan")
+        if torch.cuda.is_available():
+            dev              = torch.cuda.current_device()
+            gpu_allocated_gb = torch.cuda.memory_allocated(dev) / 1024**3
+            gpu_reserved_gb  = torch.cuda.memory_reserved(dev)  / 1024**3
+
         print(
             f"[step {step:>5} | {elapsed:6.0f}s] "
             f"reward={reward:+.3f} ± {reward_std:.3f}  "
+            f"acc={accuracy:.1%}  "
             f"loss={loss:.4f}  kl={kl:.4f}  lr={lr:.2e}  "
-            f"gpus={self._world_size}",
+            f"step_time={step_dur:.1f}s  gpus={self._world_size}",
             flush=True,
         )
+
+        if self._use_wandb:
+            dev = torch.cuda.current_device() if torch.cuda.is_available() else 0
+            wandb.log({
+                # ── Core training metrics ──────────────────────────────────────
+                "train/reward":        reward,
+                "train/reward_std":    reward_std,
+                "train/accuracy":      accuracy,
+                "train/loss":          loss,
+                "train/kl":            kl,
+                "train/learning_rate": lr,
+                # ── Throughput ─────────────────────────────────────────────────
+                "perf/step_time_s":    step_dur,
+                "perf/avg_step_time_s": avg_step_time,
+                "perf/elapsed_total_s": elapsed,
+                # ── GPU memory ─────────────────────────────────────────────────
+                f"system/gpu{dev}_allocated_gb": gpu_allocated_gb,
+                f"system/gpu{dev}_reserved_gb":  gpu_reserved_gb,
+            }, step=step)
+
+    def on_train_end(self, _args, state: TrainerState, _control: TrainerControl, **_kwargs):
+        if not state.is_local_process_zero:
+            return
+        total_time = time.time() - self._start
+        avg_step   = sum(self._step_times) / max(len(self._step_times), 1)
+        print(
+            f"\nTraining complete — {state.global_step} steps in {total_time:.0f}s "
+            f"(avg {avg_step:.1f}s/step)",
+            flush=True,
+        )
+        if self._use_wandb:
+            wandb.log({
+                "train/total_steps":    state.global_step,
+                "perf/total_time_s":    total_time,
+                "perf/avg_step_time_s": avg_step,
+            }, step=state.global_step)
 
 
 # ─── Training ─────────────────────────────────────────────────────────────────
@@ -136,6 +207,32 @@ def train(args: argparse.Namespace) -> None:
     if master_process:
         print(f"DDP: {ddp_world_size} GPUs, this is rank {ddp_rank}", flush=True)
 
+    # ── W&B init (master only) ────────────────────────────────────────────────
+    use_wandb = args.wandb and not args.test
+    if master_process and use_wandb:
+        wandb.init(
+            project=args.wandb_project,
+            name=args.wandb_run_name,
+            config={
+                "model_name":            args.model_name,
+                "data_path":             args.data_path,
+                "epochs":                args.epochs,
+                "batch_size":            args.batch_size,
+                "grad_accum":            args.grad_accum,
+                "effective_batch_size":  args.batch_size * ddp_world_size * args.grad_accum,
+                "lr":                    args.lr,
+                "lora_r":                args.lora_r,
+                "lora_alpha":            args.lora_alpha,
+                "num_generations":       args.num_generations,
+                "max_prompt_chars":      args.max_prompt_chars,
+                "max_completion_length": args.max_completion_length,
+                "ddp_world_size":        ddp_world_size,
+                "n_training_samples":    1000,
+            },
+            tags=["rlvr", "grpo", "ddp", args.model_name.split("/")[-1]],
+        )
+        print(f"W&B run: {wandb.run.url}", flush=True)
+
     # ── Tokenizer ─────────────────────────────────────────────────────────────
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -151,6 +248,8 @@ def train(args: argparse.Namespace) -> None:
     if master_process:
         total = sum(p.numel() for p in model.parameters())
         print(f"Model loaded: {total/1e9:.2f}B parameters", flush=True)
+        if use_wandb:
+            wandb.config.update({"model_total_params": total})
 
     # ── Dataset ───────────────────────────────────────────────────────────────
     dataset = load_dataset(
@@ -159,15 +258,23 @@ def train(args: argparse.Namespace) -> None:
         n_test=args.n_test if args.test else 0,
     )
     if master_process:
+        n_pos     = sum(1 for l in dataset["label"] if l == "+1")
+        n_neg     = sum(1 for l in dataset["label"] if l == "-1")
         eff_batch = args.batch_size * ddp_world_size * (1 if args.test else args.grad_accum)
         print(
             f"Dataset: {len(dataset)} samples | "
-            f"+1={sum(1 for l in dataset['label'] if l=='+1')}  "
-            f"-1={sum(1 for l in dataset['label'] if l=='-1')}\n"
+            f"+1={n_pos}  -1={n_neg} (balance={n_pos/len(dataset):.1%})\n"
             f"Effective batch: {args.batch_size} × {ddp_world_size} GPUs × "
             f"{1 if args.test else args.grad_accum} accum = {eff_batch}",
             flush=True,
         )
+        if use_wandb:
+            wandb.config.update({
+                "dataset_size":  len(dataset),
+                "dataset_pos":   n_pos,
+                "dataset_neg":   n_neg,
+                "label_balance": n_pos / len(dataset),
+            })
 
     # ── LoRA — same target modules as sft.py ──────────────────────────────────
     lora_config = LoraConfig(
@@ -199,7 +306,7 @@ def train(args: argparse.Namespace) -> None:
         save_steps=args.save_steps,
         save_total_limit=3,
         remove_unused_columns=False,
-        report_to="none",
+        report_to="wandb" if use_wandb else "none",
         # LoRA only trains a subset of params — unused params would cause DDP errors
         ddp_find_unused_parameters=False,
         # Avoid NCCL timeout on long transcript generation
@@ -215,13 +322,16 @@ def train(args: argparse.Namespace) -> None:
         peft_config=lora_config,
         reward_funcs=reward_fn,
         processing_class=tokenizer,
-        callbacks=[RewardLogger(ddp_rank, ddp_world_size)],
+        callbacks=[RewardLogger(ddp_rank, ddp_world_size, use_wandb)],
     )
 
     if master_process:
         trainable = sum(p.numel() for p in trainer.model.parameters() if p.requires_grad)
         total     = sum(p.numel() for p in trainer.model.parameters())
-        print(f"LoRA trainable: {trainable/1e6:.1f}M / {total/1e6:.0f}M ({100*trainable/total:.2f}%)", flush=True)
+        pct       = 100 * trainable / total
+        print(f"LoRA trainable: {trainable/1e6:.1f}M / {total/1e6:.0f}M ({pct:.2f}%)", flush=True)
+        if use_wandb:
+            wandb.config.update({"lora_trainable_params": trainable, "lora_pct": pct})
         print("─" * 70, flush=True)
         print("Starting GRPO training (DDP)...", flush=True)
         print("─" * 70, flush=True)
@@ -233,6 +343,8 @@ def train(args: argparse.Namespace) -> None:
         trainer.save_model(args.output_dir)
         tokenizer.save_pretrained(args.output_dir)
         print(f"Model saved to {args.output_dir}", flush=True)
+        if use_wandb:
+            wandb.finish()
 
     dist.barrier()
     dist.destroy_process_group()
@@ -265,6 +377,14 @@ def parse_args() -> argparse.Namespace:
     # LoRA
     parser.add_argument("--lora_r",     type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
+
+    # W&B
+    parser.add_argument("--wandb",          action="store_true",
+                        help="Activer le logging W&B")
+    parser.add_argument("--wandb_project",  type=str, default="rlvr-earnings",
+                        help="Nom du projet W&B")
+    parser.add_argument("--wandb_run_name", type=str, default=None,
+                        help="Nom du run W&B (auto-généré si absent)")
 
     # Test mode
     parser.add_argument("--test",   action="store_true")

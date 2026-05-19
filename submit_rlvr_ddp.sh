@@ -40,15 +40,28 @@ done
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 JOB_NAME="pit-rlvr-ddp${TEST_FLAG:+-test}-${TIMESTAMP}"
 
+# ── W&B API key — lue depuis .env dans le répertoire du projet ────────────────
+# Le .env doit contenir une ligne : WANDB_API_KEY=ton_api_key_ici
+WANDB_API_KEY=$(grep WANDB_API_KEY /home/bourgon/pit-stock-llm/.env | cut -d '=' -f2)
+if [ -z "${WANDB_API_KEY}" ]; then
+  echo "ERREUR : WANDB_API_KEY introuvable dans /home/bourgon/pit-stock-llm/.env"
+  exit 1
+fi
+
 # torchrun spawns NUM_GPUS processes et injecte RANK / LOCAL_RANK / WORLD_SIZE.
 # Pas de CUDA_VISIBLE_DEVICES — torchrun assigne les GPUs automatiquement.
 RUN_CMD="cd /home/bourgon/pit-stock-llm && \
-  pip install -q --upgrade trl peft bitsandbytes && \
+  pip install -q --upgrade trl peft bitsandbytes wandb && \
+  export WANDB_API_KEY=${WANDB_API_KEY} && \
+  wandb login ${WANDB_API_KEY} && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
   torchrun --nproc_per_node=${NUM_GPUS} --master_port=29500 rlvr_pipeline_ddp.py \
   --model_name ${MODEL_NAME} \
   --data_path  ${DATA_PATH} \
-  --output_dir ${OUTPUT_DIR}"
+  --output_dir ${OUTPUT_DIR} \
+  --wandb \
+  --wandb_project rlvr-earnings \
+  --wandb_run_name ${JOB_NAME}"
 [ -n "$TEST_FLAG" ] && RUN_CMD="${RUN_CMD} --test --n_test ${N_TEST}"
 
 # ─────────────────────────────────────────────────────────────────────────────
