@@ -338,7 +338,11 @@ def train(args: argparse.Namespace) -> None:
         print("Starting GRPO training (DDP)...", flush=True)
         print("─" * 70, flush=True)
 
-    trainer.train(resume_from_checkpoint=True)
+    from transformers.trainer_utils import get_last_checkpoint
+    resume_ckpt = get_last_checkpoint(args.output_dir) if os.path.isdir(args.output_dir) else None
+    if master_process:
+        print(f"Resuming from: {resume_ckpt}" if resume_ckpt else "Starting from scratch", flush=True)
+    trainer.train(resume_from_checkpoint=resume_ckpt)
 
     # Save from master only (weights are identical across all ranks after DDP)
     if master_process:
