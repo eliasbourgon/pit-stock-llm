@@ -37,7 +37,7 @@ def build_prompt(text: str, industry: str, date: str) -> str:
 # ─── Data ─────────────────────────────────────────────────────────────────────
 
 
-def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int, n_test: int = 0) -> Dataset:
+def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int, n_test: int = 0, args=None) -> Dataset:
     df = pd.read_parquet(data_path)
 
     required_cols = {"text", "ret_3M_shifted", "industry", "date"}
@@ -47,12 +47,12 @@ def load_dataset(data_path: str, tokenizer: AutoTokenizer, max_prompt_chars: int
 
     df = df.dropna(subset=["ret_3M_shifted"]).reset_index(drop=True)
 
-    # ── Cap dataset to 1000 training samples ──────────────────────────────────
-    df = df.head(1000)
-
     if n_test > 0:
         df = df.head(n_test)
         print(f"[TEST MODE] Using {len(df)} samples")
+    else:
+        df = df.iloc[args.data_offset:].reset_index(drop=True)
+        print(f"Dataset: {len(df)} samples (offset={args.data_offset})", flush=True)
 
     df["label"] = df["ret_3M_shifted"].apply(lambda r: "+1" if r > 0 else "-1")
 
@@ -256,6 +256,7 @@ def train(args: argparse.Namespace) -> None:
         args.data_path, tokenizer,
         max_prompt_chars=args.max_prompt_chars,
         n_test=args.n_test if args.test else 0,
+        args=args,
     )
     if master_process:
         n_pos     = sum(1 for l in dataset["label"] if l == "+1")
@@ -360,6 +361,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output_dir", type=str, required=True)
 
     # Data
+    parser.add_argument("--data_offset",           type=int, default=0,
+                        help="Skip the first N samples (e.g. 1000 to start after run 1)")
     parser.add_argument("--max_prompt_chars",      type=int, default=6000)
     parser.add_argument("--max_prompt_length",     type=int, default=2048)
     parser.add_argument("--max_completion_length", type=int, default=512)

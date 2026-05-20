@@ -20,20 +20,24 @@ CPU_CORES=24
 MEMORY="80G"
 
 # ── Params ────────────────────────────────────────────────────────────────────
-MODEL_NAME="Diamegs/PIT-4B-FT-201912"
-OUTPUT_DIR="checkpoints/pit-2019-rlvr-ddp"
+MODEL_NAME="checkpoints/pit-2019-rlvr-ddp"
+OUTPUT_DIR="checkpoints/pit-2019-rlvr-ddp-run2"
 DATA_PATH="data/merged_data.parquet"
+DATA_OFFSET=1000
+SAVE_STEPS=50
 
 # ── Args ──────────────────────────────────────────────────────────────────────
 TEST_FLAG=""
 N_TEST=10
 for arg in "$@"; do
   case $arg in
-    --test)      TEST_FLAG="--test" ;;
-    --n-test=*)  N_TEST="${arg#*=}" ;;
-    --model=*)   MODEL_NAME="${arg#*=}" ;;
-    --output=*)  OUTPUT_DIR="${arg#*=}" ;;
-    *) echo "Usage: bash submit_rlvr_ddp.sh [--test] [--n-test=N] [--model=...] [--output=...]"; exit 1 ;;
+    --test)        TEST_FLAG="--test" ;;
+    --n-test=*)    N_TEST="${arg#*=}" ;;
+    --model=*)     MODEL_NAME="${arg#*=}" ;;
+    --output=*)    OUTPUT_DIR="${arg#*=}" ;;
+    --offset=*)    DATA_OFFSET="${arg#*=}" ;;
+    --save-steps=*) SAVE_STEPS="${arg#*=}" ;;
+    *) echo "Usage: bash submit_rlvr_ddp.sh [--test] [--n-test=N] [--model=...] [--output=...] [--offset=N] [--save-steps=N]"; exit 1 ;;
   esac
 done
 
@@ -61,6 +65,8 @@ RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   --output_dir ${OUTPUT_DIR} \
   --wandb \
   --wandb_project rlvr-earnings \
+  --data_offset ${DATA_OFFSET} \
+  --save_steps  ${SAVE_STEPS} \
   --wandb_run_name ${JOB_NAME}"
 [ -n "$TEST_FLAG" ] && RUN_CMD="${RUN_CMD} --test --n_test ${N_TEST}"
 
