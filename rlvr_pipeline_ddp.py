@@ -304,8 +304,9 @@ def train(args: argparse.Namespace) -> None:
         gradient_checkpointing=False,
         bf16=True,
         logging_steps=1,
+        save_strategy="steps",
         save_steps=args.save_steps,
-        save_total_limit=3,
+        save_total_limit=None,
         remove_unused_columns=False,
         report_to="wandb" if use_wandb else "none",
         # LoRA only trains a subset of params — unused params would cause DDP errors
@@ -337,7 +338,7 @@ def train(args: argparse.Namespace) -> None:
         print("Starting GRPO training (DDP)...", flush=True)
         print("─" * 70, flush=True)
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=True)
 
     # Save from master only (weights are identical across all ranks after DDP)
     if master_process:

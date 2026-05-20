@@ -20,11 +20,11 @@ CPU_CORES=24
 MEMORY="80G"
 
 # ── Params ────────────────────────────────────────────────────────────────────
-MODEL_NAME="checkpoints/pit-2019-rlvr-ddp"
-OUTPUT_DIR="checkpoints/pit-2019-rlvr-ddp-run2"
+MODEL_NAME="Diamegs/PIT-4B-FT-201912"
+OUTPUT_DIR="checkpoints/pit-2019-rlvr-ddp-v3"
 DATA_PATH="data/merged_data.parquet"
-DATA_OFFSET=1000
-SAVE_STEPS=50
+DATA_OFFSET=0
+SAVE_STEPS=100
 
 # ── Args ──────────────────────────────────────────────────────────────────────
 TEST_FLAG=""
