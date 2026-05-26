@@ -181,7 +181,6 @@ def train(args):
         lr_scheduler_type="cosine",
         warmup_steps=10,
         num_generations=2 if args.test else args.num_generations,
-        max_prompt_length=args.max_prompt_length,
         max_completion_length=64 if args.test else args.max_completion_length,
         temperature=0.9,
         bf16=True,
