@@ -1,0 +1,2 @@
+model,accuracy,f1,abstentions,n
+"Qwen3-4B (zero-shot, no think)",0.49,0.6277372262773723,0,100
