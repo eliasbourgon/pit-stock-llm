@@ -43,7 +43,7 @@ submit_job() {
     local JOB_NAME="pit-qwen3-${REWARD}-${TIMESTAMP}"
 
     RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
-  pip install -q vllm wandb && \
+  pip install -q --upgrade trl peft bitsandbytes vllm wandb && \
   export WANDB_API_KEY=${WANDB_API_KEY} && \
   wandb login ${WANDB_API_KEY} && \
   export HF_HOME=/home/bourgon/.cache/huggingface && \

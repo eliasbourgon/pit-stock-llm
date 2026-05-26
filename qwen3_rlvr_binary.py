@@ -178,7 +178,7 @@ def train(args):
         num_generations=2 if args.test else args.num_generations,
         max_prompt_length=args.max_prompt_length,
         max_completion_length=64 if args.test else args.max_completion_length,
-        temperature=0.7,
+        temperature=0.9,
         bf16=True,
         gradient_checkpointing=True,
         logging_steps=1,
@@ -220,10 +220,10 @@ def parse_args():
     p.add_argument("--max_prompt_chars",      type=int, default=6000)
     p.add_argument("--max_prompt_length",     type=int, default=2048)
     p.add_argument("--max_completion_length", type=int, default=512)
-    p.add_argument("--num_generations",       type=int, default=8)
+    p.add_argument("--num_generations",       type=int, default=6)
     p.add_argument("--epochs",                type=int, default=1)
     p.add_argument("--batch_size",            type=int, default=1)
-    p.add_argument("--grad_accum",            type=int, default=4)
+    p.add_argument("--grad_accum",            type=int, default=8)
     p.add_argument("--lr",                    type=float, default=5e-6)
     p.add_argument("--save_steps",            type=int, default=100)
     p.add_argument("--lora_r",                type=int, default=16)
