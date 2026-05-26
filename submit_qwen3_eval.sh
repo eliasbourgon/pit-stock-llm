@@ -18,7 +18,7 @@ CPU_CORES=24
 MEMORY="80G"
 
 # ── Params ────────────────────────────────────────────────────────────────────
-MODEL_LOCAL_DIR="/scratch/models/qwen3-4b"
+MODEL_LOCAL_DIR="/home/bourgon/models/qwen3-4b"
 DATA_PATH="data/merged_data.parquet"
 OUTPUT_DIR="results/qwen3_eval"
 DATA_OFFSET=2000
