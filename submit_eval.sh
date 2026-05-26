@@ -1,10 +1,9 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# submit_eval.sh  —  Majority-vote @ 4 evaluation: baseline vs RLVR checkpoint
+# submit_eval.sh  —  Majority-vote @ 4 evaluation: baseline vs N RLVR checkpoints
 #
 # Usage:
 #   bash submit_eval.sh
-#   bash submit_eval.sh --checkpoint=checkpoints/pit-2019-rlvr-ddp-v3/checkpoint-400
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -20,42 +19,37 @@ MEMORY="80G"
 
 # ── Params ────────────────────────────────────────────────────────────────────
 BASE_MODEL="Diamegs/PIT-4B-FT-201912"
-RLVR_CHECKPOINT="checkpoints/pit-2019-rlvr-ddp-v3/checkpoint-600"
 DATA_PATH="data/merged_data.parquet"
-OUTPUT_DIR="results/eval_majority4"
+OUTPUT_DIR="results/eval_multi"
 DATA_OFFSET=2000
-N_EVAL=200
+N_EVAL=100
 
-# ── Args ──────────────────────────────────────────────────────────────────────
-for arg in "$@"; do
-  case $arg in
-    --checkpoint=*) RLVR_CHECKPOINT="${arg#*=}" ;;
-    --offset=*)     DATA_OFFSET="${arg#*=}" ;;
-    --n-eval=*)     N_EVAL="${arg#*=}" ;;
-    *) echo "Usage: bash submit_eval.sh [--checkpoint=...] [--offset=N] [--n-eval=N]"; exit 1 ;;
-  esac
-done
+RLVR_CHECKPOINTS="checkpoints/pit-2019-rlvr-ddp-v3/checkpoint-600,checkpoints/pit-2019-rlvr-pnl-v1/checkpoint-400,checkpoints/pit-2019-rlvr-gaussian-v1/checkpoint-300"
+MODEL_LABELS="RLVR DDP v3,PnL v1,Gaussian v1"
 
+# ─────────────────────────────────────────────────────────────────────────────
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-JOB_NAME="pit-eval-${TIMESTAMP}"
+JOB_NAME="pit-eval-multi-${TIMESTAMP}"
 
 RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
   pip install -q scikit-learn matplotlib seaborn && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
   torchrun --nproc_per_node=${NUM_GPUS} --master_port=29501 eval.py \
-  --base_model      ${BASE_MODEL} \
-  --rlvr_checkpoint ${RLVR_CHECKPOINT} \
-  --data_path       ${DATA_PATH} \
-  --output_dir      ${OUTPUT_DIR} \
-  --data_offset     ${DATA_OFFSET} \
-  --n_eval          ${N_EVAL}"
+  --base_model       ${BASE_MODEL} \
+  --rlvr_checkpoints \"${RLVR_CHECKPOINTS}\" \
+  --model_labels     \"${MODEL_LABELS}\" \
+  --data_path        ${DATA_PATH} \
+  --output_dir       ${OUTPUT_DIR} \
+  --data_offset      ${DATA_OFFSET} \
+  --n_eval           ${N_EVAL}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-echo "Job        : ${JOB_NAME}"
-echo "Base model : ${BASE_MODEL}"
-echo "Checkpoint : ${RLVR_CHECKPOINT}"
-echo "Eval set   : ${N_EVAL} samples (offset=${DATA_OFFSET})"
-echo "Output     : ${OUTPUT_DIR}"
+echo "Job      : ${JOB_NAME}"
+echo "Baseline : ${BASE_MODEL}"
+echo "RLVR     : ${RLVR_CHECKPOINTS}"
+echo "Labels   : ${MODEL_LABELS}"
+echo "Eval set : ${N_EVAL} samples (offset=${DATA_OFFSET})"
+echo "Output   : ${OUTPUT_DIR}"
 echo "─────────────────────────────────────────────────────────────────────────"
 
 runai submit "${JOB_NAME}" \

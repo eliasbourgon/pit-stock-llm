@@ -1,10 +1,10 @@
 """
-eval.py — Majority-vote @ 4 evaluation: baseline vs RLVR fine-tuned model.
+eval.py — Majority-vote @ 4 evaluation: baseline vs N RLVR checkpoints.
 
 Multi-GPU via torchrun:
-  torchrun --nproc_per_node=3 eval.py --base_model ... --rlvr_checkpoint ... --data_path ...
+  torchrun --nproc_per_node=3 eval.py --base_model ... --rlvr_checkpoints ... --data_path ...
 
-Each GPU handles ~1/3 of the eval samples. Results are gathered on rank 0.
+Each GPU handles ~1/3 of the eval samples. Results gathered on rank 0.
 """
 
 import re
@@ -21,6 +21,9 @@ from sklearn.metrics import f1_score
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+# Colors: baseline=blue, rlvr-ddp-v3=pink, pnl=yellow, gaussian=light blue
+COLORS = ["#4C72B0", "#E91E8C", "#FFD700", "#87CEEB"]
 
 
 # ─── Prompt — must match rlvr_pipeline_ddp.py exactly ────────────────────────
@@ -87,6 +90,7 @@ def run_eval(
     max_new_tokens: int,
     device: str,
     rank: int,
+    label: str,
 ) -> list[dict]:
     results = []
     for i, rec in enumerate(records):
@@ -108,11 +112,9 @@ def run_eval(
             tokenizer.decode(out[prompt_len:], skip_special_tokens=True)
             for out in outputs
         ]
-        # A completion is truncated if it hit the token limit exactly
         truncated = [out.shape[0] - prompt_len >= max_new_tokens for out in outputs]
-
-        votes = [extract_prediction(c) for c in completions]
-        pred  = majority_vote(completions)
+        votes     = [extract_prediction(c) for c in completions]
+        pred      = majority_vote(completions)
 
         results.append({
             "label":      rec["label"],
@@ -124,7 +126,7 @@ def run_eval(
 
         if (i + 1) % 10 == 0:
             n_correct = sum(r["correct"] for r in results)
-            print(f"  [rank {rank} | {i+1}/{len(records)}]  running acc={n_correct/(i+1):.1%}", flush=True)
+            print(f"  [{label} | rank {rank} | {i+1}/{len(records)}]  acc={n_correct/(i+1):.1%}", flush=True)
 
     return results
 
@@ -161,24 +163,27 @@ def compute_metrics(results: list[dict], label: str) -> dict:
 # ─── Plots ────────────────────────────────────────────────────────────────────
 
 def save_plots(metrics: list[dict], output_dir: str) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    names  = [m["model"] for m in metrics]
-    colors = ["#4C72B0", "#DD8452"]
+    n_models = len(metrics)
+    colors   = (COLORS * ((n_models // len(COLORS)) + 1))[:n_models]
+    names    = [m["model"] for m in metrics]
+
+    fig, axes = plt.subplots(1, 2, figsize=(max(10, 3 * n_models), 5))
 
     for ax, key, title in [
         (axes[0], "accuracy", "Accuracy"),
         (axes[1], "f1",       "F1 Score (+1)"),
     ]:
         values = [m[key] for m in metrics]
-        bars = ax.bar(names, values, color=colors)
-        ax.axhline(0.5, color="gray", linestyle="--", alpha=0.6)
-        ax.set_title(title)
+        bars   = ax.bar(names, values, color=colors, edgecolor="white", width=0.5)
+        ax.axhline(0.5, color="gray", linestyle="--", alpha=0.6, label="Random")
+        ax.set_title(title, fontsize=12)
         ax.set_ylim(0, 1)
+        ax.tick_params(axis="x", rotation=15)
         for bar, val in zip(bars, values):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
                     f"{val:.1%}", ha="center", fontsize=9)
 
-    fig.suptitle(f"Majority Vote @ 4  —  {metrics[0]['n']} samples", fontsize=11)
+    fig.suptitle(f"Majority Vote @ 4  —  {metrics[0]['n']} samples", fontsize=12)
     plt.tight_layout()
     path = os.path.join(output_dir, "eval_comparison.png")
     fig.savefig(path, dpi=150)
@@ -198,13 +203,18 @@ def main(args: argparse.Namespace) -> None:
     torch.cuda.set_device(device)
     master = rank == 0
 
+    checkpoints = [c.strip() for c in args.rlvr_checkpoints.split(",")]
+    labels_rlvr = [l.strip() for l in args.model_labels.split(",")]
+    assert len(checkpoints) == len(labels_rlvr), \
+        f"--rlvr_checkpoints ({len(checkpoints)}) and --model_labels ({len(labels_rlvr)}) must have same length"
+
     if master:
         os.makedirs(args.output_dir, exist_ok=True)
         print(f"Eval: {world_size} GPUs | {args.n_eval} samples | majority vote @ {args.num_votes}", flush=True)
+        print(f"Models: Baseline + {labels_rlvr}", flush=True)
 
-    # ── Load full data on every rank, then shard ──────────────────────────────
+    # ── Data sharding ─────────────────────────────────────────────────────────
     all_records = load_test_data(args.data_path, args.data_offset, args.n_eval, args.max_prompt_chars)
-    # Interleaved sharding: rank 0 → [0,3,6,...], rank 1 → [1,4,7,...], etc.
     shard = all_records[rank::world_size]
     if master:
         print(f"Samples per GPU: ~{len(shard)}  (total={len(all_records)})", flush=True)
@@ -217,45 +227,51 @@ def main(args: argparse.Namespace) -> None:
         tokenizer.pad_token = tokenizer.eos_token
 
     base_model = AutoModelForCausalLM.from_pretrained(
-        args.base_model, torch_dtype=torch.bfloat16, trust_remote_code=True,
+        args.base_model, dtype=torch.bfloat16, trust_remote_code=True,
     ).to(device).eval()
 
     all_metrics = []
 
-    for model_label, model, out_csv in [
-        (f"Baseline  ({args.base_model.split('/')[-1]})",        base_model, "baseline_predictions.csv"),
-        (f"RLVR      ({os.path.basename(args.rlvr_checkpoint)})", None,       "rlvr_predictions.csv"),
-    ]:
-        if model is None:
-            if master:
-                print(f"\nLoading LoRA adapter: {args.rlvr_checkpoint}", flush=True)
-            model = PeftModel.from_pretrained(base_model, args.rlvr_checkpoint).eval()
-
+    def eval_and_gather(model, label, csv_name):
         if master:
-            print(f"Running inference [{model_label.strip()}]...", flush=True)
-
+            print(f"\nRunning inference [{label}]...", flush=True)
         dist.barrier()
-        shard_results = run_eval(model, tokenizer, shard, args.num_votes, args.max_new_tokens, device, rank)
+        shard_results = run_eval(model, tokenizer, shard, args.num_votes, args.max_new_tokens, device, rank, label)
 
-        # ── Gather all shards on rank 0 ───────────────────────────────────────
         gathered = [None] * world_size
         dist.gather_object(shard_results, gathered if master else None, dst=0)
 
         if master:
-            # Reconstruct original order from interleaved shards
             full_results = [None] * len(all_records)
             for r, shard_res in enumerate(gathered):
                 for i, res in enumerate(shard_res):
                     full_results[r + i * world_size] = res
-
-            all_metrics.append(compute_metrics(full_results, model_label))
+            all_metrics.append(compute_metrics(full_results, label))
             pd.DataFrame([
                 {"label": res["label"], "prediction": res["prediction"], "votes": str(res["votes"])}
                 for res in full_results
-            ]).to_csv(os.path.join(args.output_dir, out_csv), index=False)
-
+            ]).to_csv(os.path.join(args.output_dir, csv_name), index=False)
         dist.barrier()
 
+    # ── 1. Baseline ───────────────────────────────────────────────────────────
+    eval_and_gather(base_model, f"Baseline", "baseline_predictions.csv")
+
+    # ── 2. RLVR checkpoints (multi-adapter — load once, switch between) ───────
+    peft_model = None
+    for i, (ckpt, lbl) in enumerate(zip(checkpoints, labels_rlvr)):
+        adapter_name = f"adapter_{i}"
+        if master:
+            print(f"\nLoading LoRA adapter [{lbl}]: {ckpt}", flush=True)
+
+        if peft_model is None:
+            peft_model = PeftModel.from_pretrained(base_model, ckpt, adapter_name=adapter_name).eval()
+        else:
+            peft_model.load_adapter(ckpt, adapter_name=adapter_name)
+            peft_model.set_adapter(adapter_name)
+
+        eval_and_gather(peft_model, lbl, f"predictions_{adapter_name}.csv")
+
+    # ── Summary ───────────────────────────────────────────────────────────────
     if master:
         save_plots(all_metrics, args.output_dir)
         summary_df = pd.DataFrame(all_metrics)
@@ -269,17 +285,19 @@ def main(args: argparse.Namespace) -> None:
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Majority-vote @ 4 eval: baseline vs RLVR")
-    p.add_argument("--base_model",       type=str, required=True)
-    p.add_argument("--rlvr_checkpoint",  type=str, required=True,
-                   help="Path to LoRA checkpoint dir (e.g. checkpoints/.../checkpoint-600)")
-    p.add_argument("--data_path",        type=str, default="data/merged_data.parquet")
-    p.add_argument("--output_dir",       type=str, default="results/eval")
-    p.add_argument("--data_offset",      type=int, default=2000)
-    p.add_argument("--n_eval",           type=int, default=200)
-    p.add_argument("--num_votes",        type=int, default=4)
-    p.add_argument("--max_new_tokens",   type=int, default=700)
-    p.add_argument("--max_prompt_chars", type=int, default=6000)
+    p = argparse.ArgumentParser(description="Majority-vote @ 4 eval: baseline vs N RLVR checkpoints")
+    p.add_argument("--base_model",        type=str, required=True)
+    p.add_argument("--rlvr_checkpoints",  type=str, required=True,
+                   help="Comma-separated LoRA checkpoint paths")
+    p.add_argument("--model_labels",      type=str, required=True,
+                   help="Comma-separated labels matching --rlvr_checkpoints")
+    p.add_argument("--data_path",         type=str, default="data/merged_data.parquet")
+    p.add_argument("--output_dir",        type=str, default="results/eval")
+    p.add_argument("--data_offset",       type=int, default=2000)
+    p.add_argument("--n_eval",            type=int, default=200)
+    p.add_argument("--num_votes",         type=int, default=4)
+    p.add_argument("--max_new_tokens",    type=int, default=700)
+    p.add_argument("--max_prompt_chars",  type=int, default=6000)
     return p.parse_args()
 
 
