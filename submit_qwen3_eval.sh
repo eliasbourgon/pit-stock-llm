@@ -13,7 +13,7 @@ PROJECT="sfi-sm-bourgon"
 IMAGE="ayushkumartarun/course-cs-552-standard:v1"
 PVC_HOME="home"
 PVC_SCRATCH="sfi-sm-scratch"
-NUM_GPUS=3
+NUM_GPUS=2
 CPU_CORES=24
 MEMORY="80G"
 
