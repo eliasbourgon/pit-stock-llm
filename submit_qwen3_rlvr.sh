@@ -29,6 +29,13 @@ WANDB_PROJECT="rlvr-earnings-qwen3"
 # ─────────────────────────────────────────────────────────────────────────────
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
+# ── W&B API key — lue depuis .env dans le répertoire du projet ────────────────
+WANDB_API_KEY=$(grep WANDB_API_KEY /home/bourgon/pit-stock-llm/.env | cut -d '=' -f2)
+if [ -z "${WANDB_API_KEY}" ]; then
+  echo "ERREUR : WANDB_API_KEY introuvable dans /home/bourgon/pit-stock-llm/.env"
+  exit 1
+fi
+
 submit_job() {
     local REWARD="$1"
     local SCRIPT="qwen3_rlvr_${REWARD}.py"
@@ -36,7 +43,9 @@ submit_job() {
     local JOB_NAME="pit-qwen3-${REWARD}-${TIMESTAMP}"
 
     RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
-  pip install -q vllm && \
+  pip install -q vllm wandb && \
+  export WANDB_API_KEY=${WANDB_API_KEY} && \
+  wandb login ${WANDB_API_KEY} && \
   export HF_HOME=/home/bourgon/.cache/huggingface && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
   python -u ${SCRIPT} \
