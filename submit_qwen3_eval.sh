@@ -28,7 +28,7 @@ N_EVAL=100
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 JOB_NAME="pit-qwen3-eval-${TIMESTAMP}"
 
-RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && mkdir -p /scratch/models && \
+RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
   pip install -q vllm scikit-learn matplotlib huggingface_hub && \
   export HF_HOME=/home/bourgon/.cache/huggingface && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
