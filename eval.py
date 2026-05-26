@@ -1,6 +1,10 @@
 """
 eval.py — Majority-vote @ 4 evaluation: baseline vs N RLVR checkpoints.
 
+Supports two model types:
+  - binary   : predicts +1 or -1 directly
+  - gaussian : predicts a continuous % return; sign is used for direction accuracy
+
 Multi-GPU via torchrun:
   torchrun --nproc_per_node=3 eval.py --base_model ... --rlvr_checkpoints ... --data_path ...
 
@@ -26,9 +30,9 @@ import matplotlib.pyplot as plt
 COLORS = ["#4C72B0", "#E91E8C", "#FFD700", "#87CEEB"]
 
 
-# ─── Prompt — must match rlvr_pipeline_ddp.py exactly ────────────────────────
+# ─── Prompts ──────────────────────────────────────────────────────────────────
 
-def build_prompt(text: str, industry: str, date: str) -> str:
+def build_prompt_binary(text: str, industry: str, date: str) -> str:
     instruction = (
         f"Date: {date}\n"
         f"Industry: {industry}\n"
@@ -40,15 +44,58 @@ def build_prompt(text: str, industry: str, date: str) -> str:
     return f"<|user|>\n{instruction}\n<|assistant|>\n"
 
 
-# ─── Parsing & voting ─────────────────────────────────────────────────────────
+def build_prompt_gaussian(text: str, industry: str, date: str) -> str:
+    instruction = (
+        f"Date: {date}\n"
+        f"Industry: {industry}\n"
+        f"Earnings Call Transcript:\n{text}\n\n"
+        "Based on this earnings call, predict the stock's 1-month return as a percentage. "
+        "Positive means price increase, negative means price decrease. "
+        "Typical returns range from -5% to +5%.\n"
+        "Answer in percentage (e.g. +2.3 or -1.5):"
+    )
+    return f"<|user|>\n{instruction}\n<|assistant|>\n"
 
-def extract_prediction(text: str) -> str | None:
+
+PROMPT_FNS = {
+    "binary":   build_prompt_binary,
+    "gaussian": build_prompt_gaussian,
+}
+
+
+# ─── Extraction ───────────────────────────────────────────────────────────────
+
+def extract_binary(text: str) -> str | None:
     matches = re.findall(r"([+-]1)\b", text.strip())
     return matches[-1] if matches else None
 
 
-def majority_vote(completions: list[str]) -> str | None:
-    votes = [extract_prediction(c) for c in completions]
+def extract_gaussian(text: str) -> str | None:
+    """Extract a float return prediction and convert its sign to +1/-1."""
+    # Primary: number followed by %
+    matches = re.findall(r"([+-]?\d+(?:\.\d+)?)\s*%", text)
+    if not matches:
+        # Fallback: signed number
+        matches = re.findall(r"([+-]\d+(?:\.\d+)?)", text)
+    if not matches:
+        return None
+    try:
+        val = float(matches[-1])
+        return "+1" if val > 0 else "-1"
+    except ValueError:
+        return None
+
+
+EXTRACT_FNS = {
+    "binary":   extract_binary,
+    "gaussian": extract_gaussian,
+}
+
+
+# ─── Voting ───────────────────────────────────────────────────────────────────
+
+def majority_vote(completions: list[str], extract_fn) -> str | None:
+    votes = [extract_fn(c) for c in completions]
     valid = [v for v in votes if v is not None]
     if not valid:
         return None
@@ -62,6 +109,7 @@ def majority_vote(completions: list[str]) -> str | None:
 # ─── Data ─────────────────────────────────────────────────────────────────────
 
 def load_test_data(data_path: str, offset: int, n_eval: int, max_prompt_chars: int) -> list[dict]:
+    """Returns raw records without prompt — prompt is built per model type in run_eval."""
     df = pd.read_parquet(data_path)
     df = df.dropna(subset=["ret_3M_shifted"]).reset_index(drop=True)
     df = df.iloc[offset : offset + n_eval].reset_index(drop=True)
@@ -71,10 +119,11 @@ def load_test_data(data_path: str, offset: int, n_eval: int, max_prompt_chars: i
         text = row["text"]
         if len(text) > max_prompt_chars:
             text = text[:max_prompt_chars] + "\n[truncated]"
-        date_str = pd.Period(row["date"]).strftime("%B %Y")
         records.append({
-            "prompt": build_prompt(text, row["industry"], date_str),
-            "label":  "+1" if row["ret_3M_shifted"] > 0 else "-1",
+            "text":     text,
+            "industry": row["industry"],
+            "date_str": pd.Period(row["date"]).strftime("%B %Y"),
+            "label":    "+1" if row["ret_3M_shifted"] > 0 else "-1",
         })
     return records
 
@@ -91,11 +140,16 @@ def run_eval(
     device: str,
     rank: int,
     label: str,
+    model_type: str,
 ) -> list[dict]:
+    build_prompt_fn = PROMPT_FNS[model_type]
+    extract_fn      = EXTRACT_FNS[model_type]
+
     results = []
     for i, rec in enumerate(records):
+        prompt = build_prompt_fn(rec["text"], rec["industry"], rec["date_str"])
         inputs = tokenizer(
-            rec["prompt"], return_tensors="pt", truncation=True, max_length=2048
+            prompt, return_tensors="pt", truncation=True, max_length=2048
         ).to(device)
 
         outputs = model.generate(
@@ -107,14 +161,14 @@ def run_eval(
             pad_token_id=tokenizer.eos_token_id,
         )
 
-        prompt_len = inputs["input_ids"].shape[1]
+        prompt_len  = inputs["input_ids"].shape[1]
         completions = [
             tokenizer.decode(out[prompt_len:], skip_special_tokens=True)
             for out in outputs
         ]
         truncated = [out.shape[0] - prompt_len >= max_new_tokens for out in outputs]
-        votes     = [extract_prediction(c) for c in completions]
-        pred      = majority_vote(completions)
+        votes     = [extract_fn(c) for c in completions]
+        pred      = majority_vote(completions, extract_fn)
 
         results.append({
             "label":      rec["label"],
@@ -203,17 +257,19 @@ def main(args: argparse.Namespace) -> None:
     torch.cuda.set_device(device)
     master = rank == 0
 
-    checkpoints = [c.strip() for c in args.rlvr_checkpoints.split(",")]
-    labels_rlvr = [l.strip() for l in args.model_labels.split(",")]
-    assert len(checkpoints) == len(labels_rlvr), \
-        f"--rlvr_checkpoints ({len(checkpoints)}) and --model_labels ({len(labels_rlvr)}) must have same length"
+    checkpoints  = [c.strip() for c in args.rlvr_checkpoints.split(",")]
+    labels_rlvr  = [l.strip() for l in args.model_labels.split(",")]
+    model_types  = [t.strip() for t in args.model_types.split(",")]
+    assert len(checkpoints) == len(labels_rlvr) == len(model_types), \
+        "--rlvr_checkpoints, --model_labels and --model_types must have the same number of entries"
 
     if master:
         os.makedirs(args.output_dir, exist_ok=True)
         print(f"Eval: {world_size} GPUs | {args.n_eval} samples | majority vote @ {args.num_votes}", flush=True)
-        print(f"Models: Baseline + {labels_rlvr}", flush=True)
+        for lbl, ckpt, mtype in zip(labels_rlvr, checkpoints, model_types):
+            print(f"  {lbl} ({mtype}) : {ckpt}", flush=True)
 
-    # ── Data sharding ─────────────────────────────────────────────────────────
+    # ── Data ─────────────────────────────────────────────────────────────────
     all_records = load_test_data(args.data_path, args.data_offset, args.n_eval, args.max_prompt_chars)
     shard = all_records[rank::world_size]
     if master:
@@ -232,15 +288,16 @@ def main(args: argparse.Namespace) -> None:
 
     all_metrics = []
 
-    def eval_and_gather(model, label, csv_name):
+    def eval_and_gather(model, label, csv_name, model_type):
         if master:
-            print(f"\nRunning inference [{label}]...", flush=True)
+            print(f"\nRunning inference [{label}] (type={model_type})...", flush=True)
         dist.barrier()
-        shard_results = run_eval(model, tokenizer, shard, args.num_votes, args.max_new_tokens, device, rank, label)
-
+        shard_results = run_eval(
+            model, tokenizer, shard,
+            args.num_votes, args.max_new_tokens, device, rank, label, model_type,
+        )
         gathered = [None] * world_size
         dist.gather_object(shard_results, gathered if master else None, dst=0)
-
         if master:
             full_results = [None] * len(all_records)
             for r, shard_res in enumerate(gathered):
@@ -253,23 +310,22 @@ def main(args: argparse.Namespace) -> None:
             ]).to_csv(os.path.join(args.output_dir, csv_name), index=False)
         dist.barrier()
 
-    # ── 1. Baseline ───────────────────────────────────────────────────────────
-    eval_and_gather(base_model, f"Baseline", "baseline_predictions.csv")
+    # ── 1. Baseline (binary prompt) ───────────────────────────────────────────
+    eval_and_gather(base_model, "Baseline", "baseline_predictions.csv", "binary")
 
-    # ── 2. RLVR checkpoints (multi-adapter — load once, switch between) ───────
+    # ── 2. RLVR checkpoints ───────────────────────────────────────────────────
     peft_model = None
-    for i, (ckpt, lbl) in enumerate(zip(checkpoints, labels_rlvr)):
+    for i, (ckpt, lbl, mtype) in enumerate(zip(checkpoints, labels_rlvr, model_types)):
         adapter_name = f"adapter_{i}"
         if master:
             print(f"\nLoading LoRA adapter [{lbl}]: {ckpt}", flush=True)
-
         if peft_model is None:
             peft_model = PeftModel.from_pretrained(base_model, ckpt, adapter_name=adapter_name).eval()
         else:
             peft_model.load_adapter(ckpt, adapter_name=adapter_name)
             peft_model.set_adapter(adapter_name)
 
-        eval_and_gather(peft_model, lbl, f"predictions_{adapter_name}.csv")
+        eval_and_gather(peft_model, lbl, f"predictions_{adapter_name}.csv", mtype)
 
     # ── Summary ───────────────────────────────────────────────────────────────
     if master:
@@ -290,11 +346,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--rlvr_checkpoints",  type=str, required=True,
                    help="Comma-separated LoRA checkpoint paths")
     p.add_argument("--model_labels",      type=str, required=True,
-                   help="Comma-separated labels matching --rlvr_checkpoints")
+                   help="Comma-separated display labels (one per checkpoint)")
+    p.add_argument("--model_types",       type=str, required=True,
+                   help="Comma-separated types: 'binary' or 'gaussian' (one per checkpoint)")
     p.add_argument("--data_path",         type=str, default="data/merged_data.parquet")
     p.add_argument("--output_dir",        type=str, default="results/eval")
     p.add_argument("--data_offset",       type=int, default=2000)
-    p.add_argument("--n_eval",            type=int, default=200)
+    p.add_argument("--n_eval",            type=int, default=100)
     p.add_argument("--num_votes",         type=int, default=4)
     p.add_argument("--max_new_tokens",    type=int, default=700)
     p.add_argument("--max_prompt_chars",  type=int, default=6000)

@@ -26,6 +26,7 @@ N_EVAL=100
 
 RLVR_CHECKPOINTS="checkpoints/pit-2019-rlvr-ddp-v3/checkpoint-600,checkpoints/pit-2019-rlvr-pnl-v1/checkpoint-400,checkpoints/pit-2019-rlvr-gaussian-v1/checkpoint-300"
 MODEL_LABELS="RLVR DDP v3,PnL v1,Gaussian v1"
+MODEL_TYPES="binary,binary,gaussian"
 
 # ─────────────────────────────────────────────────────────────────────────────
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -38,6 +39,7 @@ RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
   --base_model       ${BASE_MODEL} \
   --rlvr_checkpoints \"${RLVR_CHECKPOINTS}\" \
   --model_labels     \"${MODEL_LABELS}\" \
+  --model_types      \"${MODEL_TYPES}\" \
   --data_path        ${DATA_PATH} \
   --output_dir       ${OUTPUT_DIR} \
   --data_offset      ${DATA_OFFSET} \
