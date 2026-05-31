@@ -83,13 +83,13 @@ def majority_vote(completions: list[str]) -> str | None:
 
 def load_test_data(data_path: str, offset: int, n_eval: int, max_prompt_chars: int, tokenizer) -> list[dict]:
     df = pd.read_parquet(data_path)
-    df = df.dropna(subset=["ret_3M_shifted", "text"]).reset_index(drop=True)
+    df = df.dropna(subset=["ret_3M_shifted"]).reset_index(drop=True)
     df = df.iloc[offset : offset + n_eval].reset_index(drop=True)
     print(f"Eval set: {len(df)} samples (rows {offset}–{offset + len(df) - 1})", flush=True)
 
     records = []
     for _, row in df.iterrows():
-        text = row["text"]
+        text = row["text"] if pd.notna(row["text"]) else ""
         if len(text) > max_prompt_chars:
             text = text[:max_prompt_chars] + "\n[truncated]"
         date_str = pd.Period(row["date"]).strftime("%B %Y")
