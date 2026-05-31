@@ -107,6 +107,7 @@ def run_eval(llm: LLM, records: list[dict], num_votes: int, max_new_tokens: int)
         n=num_votes,
         temperature=0.6,
         max_tokens=max_new_tokens,
+        truncate_prompt_tokens=7992,  # max_model_len(8192) - max_new_tokens(200)
     )
 
     print(f"Generating {len(records)} × {num_votes} completions...", flush=True)
@@ -199,7 +200,7 @@ def main(args: argparse.Namespace) -> None:
         tensor_parallel_size=args.tensor_parallel_size,
         dtype="bfloat16",
         trust_remote_code=True,
-        max_model_len=4096,
+        max_model_len=8192,
     )
 
     # 5. Eval
