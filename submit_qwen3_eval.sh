@@ -47,6 +47,8 @@ echo "Eval   : ${N_EVAL} samples (offset=${DATA_OFFSET})"
 echo "Output : ${OUTPUT_DIR}"
 echo "─────────────────────────────────────────────────────────────────────────"
 
+ENCODED=$(printf '%s' "${RUN_CMD}" | base64 | tr -d '\n')
+
 runai submit "${JOB_NAME}" \
   --project     "${PROJECT}" \
   --image       "${IMAGE}" \
@@ -59,7 +61,7 @@ runai submit "${JOB_NAME}" \
   --pvc         "${PVC_HOME}:/home/bourgon" \
   --pvc         "${PVC_SCRATCH}:/scratch" \
   --working-dir "/tmp" \
-  --command -- bash -c "${RUN_CMD}"
+  --command -- bash -c "echo ${ENCODED} | base64 -d | bash"
 
 echo ""
 echo "Logs   : runai logs ${JOB_NAME} -f"

@@ -60,6 +60,9 @@ submit_job() {
 
     echo "Submitting [${REWARD}] → ${JOB_NAME}"
 
+    local ENCODED
+    ENCODED=$(printf '%s' "${RUN_CMD}" | base64 | tr -d '\n')
+
     runai submit "${JOB_NAME}" \
       --project     "${PROJECT}" \
       --image       "${IMAGE}" \
@@ -71,7 +74,7 @@ submit_job() {
       -e USER="$(whoami)" -e HOME="/home/bourgon" -e PYTHONUNBUFFERED=1 \
       --pvc         "${PVC_HOME}:/home/bourgon" \
       --working-dir "/tmp" \
-      --command -- bash -c "${RUN_CMD}"
+      --command -- bash -c "echo ${ENCODED} | base64 -d | bash"
 
     echo "  Logs   : runai logs ${JOB_NAME} -f"
     echo "  Stop   : runai delete job ${JOB_NAME}"
