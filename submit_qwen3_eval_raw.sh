@@ -22,7 +22,7 @@ MEMORY="80G"
 
 # ── Params ────────────────────────────────────────────────────────────────────
 MODEL_LOCAL_DIR="/home/bourgon/models/qwen3-4b"
-RAW_PARQUET="data/sm-calls_with_connectors.parquet"
+RAW_PARQUET="data/Predictors/sm-calls_with_connectors.parquet"
 RETURNS_CSV="data/Targets/monthly_crsp.csv"
 MERGED_RAW="data/merged_data_raw.parquet"
 OUTPUT_DIR="results/qwen3_eval_raw"
