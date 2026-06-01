@@ -142,19 +142,6 @@ Results are saved to `results/`.
 
 ---
 
-## RunAI — interactive Jupyter session
-
-```bash
-# Launch Jupyter Lab on the cluster
-bash submit.sh
-
-# Then port-forward from your machine
-runai port-forward <job-name> --port 8888:8888 -p sfi-sm-bourgon
-# Open http://localhost:8888  (token: sfi)
-```
-
----
-
 ## Reward functions
 
 | Name | Formula | Intuition |
