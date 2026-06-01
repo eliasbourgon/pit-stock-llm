@@ -1,6 +1,22 @@
+# Data (too large for git — see README for how to obtain)
 data/
-sm-calls_with_connectors.parquet
+
+# Generated / intermediate files
+*.log
+*_checkpoint*.parquet
+sm-calls_summarized_checkpoint.parquet
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
 .ipynb_checkpoints/
+
+# OS
 .DS_Store
-.claude/
+
+# Secrets
 .env
+
+# Claude Code internal
+.claude/
