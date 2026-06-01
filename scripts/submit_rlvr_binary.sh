@@ -1,11 +1,11 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# submit_rlvr_ddp.sh  —  GRPO fine-tuning on 3 GPUs (DDP via torchrun)
+# submit_rlvr_binary.sh  —  GRPO fine-tuning on 3 GPUs (DDP via torchrun)
 #
 # Usage:
-#   bash submit_rlvr_ddp.sh                              # full run (1 epoch)
-#   bash submit_rlvr_ddp.sh --test                       # 1 step — mesure temps
-#   bash submit_rlvr_ddp.sh --model=Diamegs/PIT-4B-FT-201312 --output=checkpoints/pit-2013-ddp
+#   bash scripts/submit_rlvr_binary.sh                              # full run (1 epoch)
+#   bash scripts/submit_rlvr_binary.sh --test                       # 1 step — mesure temps
+#   bash scripts/submit_rlvr_binary.sh --model=Diamegs/PIT-4B-FT-201312 --output=checkpoints/pit-2013-ddp
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -37,7 +37,7 @@ for arg in "$@"; do
     --output=*)    OUTPUT_DIR="${arg#*=}" ;;
     --offset=*)    DATA_OFFSET="${arg#*=}" ;;
     --save-steps=*) SAVE_STEPS="${arg#*=}" ;;
-    *) echo "Usage: bash submit_rlvr_ddp.sh [--test] [--n-test=N] [--model=...] [--output=...] [--offset=N] [--save-steps=N]"; exit 1 ;;
+    *) echo "Usage: bash scripts/submit_rlvr_binary.sh [--test] [--n-test=N] [--model=...] [--output=...] [--offset=N] [--save-steps=N]"; exit 1 ;;
   esac
 done
 
@@ -59,7 +59,7 @@ RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   export WANDB_API_KEY=${WANDB_API_KEY} && \
   wandb login ${WANDB_API_KEY} && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  torchrun --nproc_per_node=${NUM_GPUS} --master_port=29500 rlvr_pipeline_ddp.py \
+  torchrun --nproc_per_node=${NUM_GPUS} --master_port=29500 src/training/rlvr_binary.py \
   --model_name ${MODEL_NAME} \
   --data_path  ${DATA_PATH} \
   --output_dir ${OUTPUT_DIR} \

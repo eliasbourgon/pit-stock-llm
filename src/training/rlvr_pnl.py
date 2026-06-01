@@ -5,7 +5,7 @@ Reward = sign(prediction) × clip(actual_return, ±reward_clip)
 instead of binary +1/-1.  This removes the positive-prediction bias
 by making the signal proportional to the magnitude of what was missed.
 
-torchrun --nproc_per_node=3 rlvr_pipeline_ddp_v2.py --model_name ... --data_path ... --output_dir ...
+torchrun --nproc_per_node=3 src/training/rlvr_pnl.py --model_name ... --data_path ... --output_dir ...
 """
 
 import os

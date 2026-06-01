@@ -6,7 +6,7 @@ Supports two model types:
   - gaussian : predicts a continuous % return; sign is used for direction accuracy
 
 Multi-GPU via torchrun:
-  torchrun --nproc_per_node=3 eval.py --base_model ... --rlvr_checkpoints ... --data_path ...
+  torchrun --nproc_per_node=3 src/evaluation/eval.py --base_model ... --rlvr_checkpoints ... --data_path ...
 
 Each GPU handles ~1/3 of the eval samples. Results gathered on rank 0.
 """

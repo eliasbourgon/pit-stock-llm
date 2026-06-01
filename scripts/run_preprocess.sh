@@ -26,7 +26,7 @@ OUTPUT="data/merged_data.parquet"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 JOB_NAME="pit-preprocess-${TIMESTAMP}"
 
-RUN_CMD="cd /home/bourgon/pit-stock-llm && python -u pre_process.py \
+RUN_CMD="cd /home/bourgon/pit-stock-llm && python -u src/preprocessing/pre_process.py \
   --input   ${INPUT} \
   --returns ${RETURNS} \
   --output  ${OUTPUT}"

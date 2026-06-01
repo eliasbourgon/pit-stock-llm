@@ -32,7 +32,7 @@ RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
   pip install -q vllm scikit-learn matplotlib huggingface_hub && \
   export HF_HOME=/home/bourgon/.cache/huggingface && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  python -u qwen3_eval.py \
+  python -u src/evaluation/qwen3_eval.py \
   --model_local_dir      ${MODEL_LOCAL_DIR} \
   --data_path            ${DATA_PATH} \
   --output_dir           ${OUTPUT_DIR} \

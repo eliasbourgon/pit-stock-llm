@@ -10,7 +10,7 @@ Steps:
 Thinking mode disabled (enable_thinking=False) for fast direct predictions.
 
 Usage:
-  python qwen3_eval.py --data_path data/merged_data.parquet
+  python src/evaluation/qwen3_eval.py --data_path data/merged_data.parquet
 """
 
 import os

@@ -45,7 +45,7 @@ JOB_NAME="pit-inspect-${TIMESTAMP}"
 
 RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  python inspect_generations.py \
+  python src/evaluation/inspect_generations.py \
   --base_model      ${BASE_MODEL} \
   --rlvr_checkpoint ${RLVR_CHECKPOINT} \
   --data_path       ${DATA_PATH} \

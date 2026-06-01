@@ -41,7 +41,7 @@ JOB_NAME="pit-baseline${TEST_FLAG:+-test}-${TIMESTAMP}"
 
 RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p results && \
   pip install -q matplotlib seaborn scikit-learn && \
-  python -u baseline.py \
+  python -u src/evaluation/baseline.py \
   --model_name ${MODEL_NAME} \
   --data_path  ${DATA_PATH} \
   --output_csv ${OUTPUT_CSV}"

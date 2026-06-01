@@ -10,7 +10,7 @@ reward ∈ (0, 1].  Perfect prediction → 1.  Wrong direction → near 0.
 sigma controls tolerance: large = direction matters, small = precision required.
 Abstention (no number found) → 0.0.
 
-torchrun --nproc_per_node=3 rlvr_pipeline_ddp_v3.py --model_name ... --data_path ... --output_dir ...
+torchrun --nproc_per_node=3 src/training/rlvr_gaussian.py --model_name ... --data_path ... --output_dir ...
 """
 
 import math

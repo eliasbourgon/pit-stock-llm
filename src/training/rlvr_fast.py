@@ -1,6 +1,6 @@
 """
 RLVR fine-tuning pipeline for PIT stock return prediction.
-Speed-optimized version of rlvr_pipeline.py.
+Speed-optimized version of src/training/rlvr_single_gpu.py.
 
 Changes vs original:
   - Model loaded in bfloat16 (was fp32): halves VRAM, faster matmuls

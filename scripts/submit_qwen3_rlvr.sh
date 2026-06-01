@@ -38,7 +38,7 @@ fi
 
 submit_job() {
     local REWARD="$1"
-    local SCRIPT="qwen3_rlvr_${REWARD}.py"
+    local SCRIPT="src/training/qwen3_rlvr_${REWARD}.py"
     local OUTPUT_DIR="checkpoints/qwen3-${REWARD}-v1"
     local JOB_NAME="pit-qwen3-${REWARD}-${TIMESTAMP}"
 

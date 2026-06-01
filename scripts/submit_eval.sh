@@ -35,7 +35,7 @@ JOB_NAME="pit-eval-multi-${TIMESTAMP}"
 RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
   pip install -q scikit-learn matplotlib seaborn && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  torchrun --nproc_per_node=${NUM_GPUS} --master_port=29501 eval.py \
+  torchrun --nproc_per_node=${NUM_GPUS} --master_port=29501 src/evaluation/eval.py \
   --base_model       ${BASE_MODEL} \
   --rlvr_checkpoints \"${RLVR_CHECKPOINTS}\" \
   --model_labels     \"${MODEL_LABELS}\" \

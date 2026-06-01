@@ -7,7 +7,7 @@ Dataset: data/merged_data.parquet
 Outputs per-sample predictions and aggregate metrics (accuracy, F1).
 
 Usage:
-    python baseline.py \
+    python src/evaluation/baseline.py \
         --model_name Diamegs/PIT-4B-FT-201312 \
         [--data_path data/merged_data.parquet] \
         [--max_prompt_chars 6000] \

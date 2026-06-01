@@ -36,7 +36,7 @@ done
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 JOB_NAME="pit-summarize${TEST_FLAG:+-test}-${TIMESTAMP}"
 
-RUN_CMD="cd /home/bourgon/pit-stock-llm && python -u preprocess_summarize.py \
+RUN_CMD="cd /home/bourgon/pit-stock-llm && python -u src/preprocessing/preprocess_summarize.py \
   --input  ${INPUT} \
   --output ${OUTPUT} \
   ${TEST_FLAG}"

@@ -1,12 +1,12 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# submit_rlvr_ddp_v2.sh  —  GRPO fine-tuning v2 (PnL reward) on 3 GPUs
+# submit_rlvr_pnl.sh  —  GRPO fine-tuning v2 (PnL reward) on 3 GPUs
 #
 # Usage:
-#   bash submit_rlvr_ddp_v2.sh                              # full run (1 epoch)
-#   bash submit_rlvr_ddp_v2.sh --test                       # 1 step — mesure temps
-#   bash submit_rlvr_ddp_v2.sh --model=Diamegs/PIT-4B-FT-201312 --output=checkpoints/pit-2013-pnl
-#   bash submit_rlvr_ddp_v2.sh --reward-clip=0.10           # tighter clipping
+#   bash scripts/submit_rlvr_pnl.sh                              # full run (1 epoch)
+#   bash scripts/submit_rlvr_pnl.sh --test                       # 1 step — mesure temps
+#   bash scripts/submit_rlvr_pnl.sh --model=Diamegs/PIT-4B-FT-201312 --output=checkpoints/pit-2013-pnl
+#   bash scripts/submit_rlvr_pnl.sh --reward-clip=0.10           # tighter clipping
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -40,7 +40,7 @@ for arg in "$@"; do
     --offset=*)       DATA_OFFSET="${arg#*=}" ;;
     --save-steps=*)   SAVE_STEPS="${arg#*=}" ;;
     --reward-clip=*)  REWARD_CLIP="${arg#*=}" ;;
-    *) echo "Usage: bash submit_rlvr_ddp_v2.sh [--test] [--n-test=N] [--model=...] [--output=...] [--offset=N] [--save-steps=N] [--reward-clip=F]"; exit 1 ;;
+    *) echo "Usage: bash scripts/submit_rlvr_pnl.sh [--test] [--n-test=N] [--model=...] [--output=...] [--offset=N] [--save-steps=N] [--reward-clip=F]"; exit 1 ;;
   esac
 done
 
@@ -62,7 +62,7 @@ RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   export WANDB_API_KEY=${WANDB_API_KEY} && \
   wandb login ${WANDB_API_KEY} && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  torchrun --nproc_per_node=${NUM_GPUS} --master_port=29500 rlvr_pipeline_ddp_v2.py \
+  torchrun --nproc_per_node=${NUM_GPUS} --master_port=29500 src/training/rlvr_pnl.py \
   --model_name  ${MODEL_NAME} \
   --data_path   ${DATA_PATH} \
   --output_dir  ${OUTPUT_DIR} \
@@ -84,7 +84,7 @@ echo "Test        : ${TEST_FLAG:-non}"
 if [ -n "$TEST_FLAG" ]; then
   echo ""
   echo "  Speed test: 1 step sur ${NUM_GPUS} GPUs."
-  echo "  Comparer avec submit_rlvr_fast.sh --test pour voir le gain DDP."
+  echo "  Comparer avec scripts/submit_rlvr_fast.sh --test pour voir le gain DDP."
 fi
 echo "─────────────────────────────────────────────────────────────────────────"
 

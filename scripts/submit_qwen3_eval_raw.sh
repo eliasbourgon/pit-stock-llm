@@ -39,12 +39,12 @@ RUN_CMD="cd /home/bourgon/pit-stock-llm && mkdir -p ${OUTPUT_DIR} && \
   export HF_HOME=/home/bourgon/.cache/huggingface && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
   echo '--- Step 1: merging raw transcripts with returns ---' && \
-  python pre_process.py \
+  python src/preprocessing/pre_process.py \
     --input   ${RAW_PARQUET} \
     --returns ${RETURNS_CSV} \
     --output  ${MERGED_RAW} && \
   echo '--- Step 2: Qwen3 eval on raw transcripts ---' && \
-  python -u qwen3_eval.py \
+  python -u src/evaluation/qwen3_eval.py \
     --model_local_dir      ${MODEL_LOCAL_DIR} \
     --data_path            ${MERGED_RAW} \
     --output_dir           ${OUTPUT_DIR} \

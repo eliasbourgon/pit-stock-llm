@@ -8,7 +8,7 @@ quality and style of the responses.
 Single GPU, no DDP needed.
 
 Example:
-  python inspect_generations.py \
+  python src/evaluation/inspect_generations.py \
     --base_model microsoft/Phi-3-mini-4k-instruct \
     --rlvr_checkpoint checkpoints/.../checkpoint-600 \
     --n_samples 5 \

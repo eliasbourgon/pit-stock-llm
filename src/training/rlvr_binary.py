@@ -1,8 +1,8 @@
 """
 RLVR fine-tuning pipeline — multi-GPU DDP version.
-Based on rlvr_pipeline_fast.py, DDP init pattern from post_training/sft.py.
+Based on src/training/rlvr_fast.py, DDP init pattern from post_training/sft.py.
 
-torchrun --nproc_per_node=3 rlvr_pipeline_ddp.py --model_name ... --data_path ... --output_dir ...
+torchrun --nproc_per_node=3 src/training/rlvr_binary.py --model_name ... --data_path ... --output_dir ...
 """
 
 import os
