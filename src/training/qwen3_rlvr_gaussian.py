@@ -7,7 +7,7 @@ Thinking: OFF — direct answer, let the model develop its own reasoning.
 Speed   : vLLM backend for generation (5-10× faster than transformers).
 GPU     : single GPU.
 
-python qwen3_rlvr_gaussian.py \
+python src/training/qwen3_rlvr_gaussian.py \
   --model_path /home/bourgon/models/qwen3-4b \
   --data_path  data/merged_data.parquet \
   --output_dir checkpoints/qwen3-gaussian-v1

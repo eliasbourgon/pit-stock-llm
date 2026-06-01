@@ -1,11 +1,11 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# submit_fast.sh  —  Speed-optimized GRPO fine-tuning (rlvr_pipeline_fast.py)
+# submit_rlvr_fast.sh  —  Speed-optimized GRPO fine-tuning (src/training/rlvr_fast.py)
 #
 # Usage:
-#   bash submit_fast.sh                              # full run (1 epoch)
-#   bash submit_fast.sh --test                       # 1 step — measure step time
-#   bash submit_fast.sh --model=Diamegs/PIT-4B-FT-201312 --output=checkpoints/pit-2013-fast
+#   bash scripts/submit_rlvr_fast.sh                              # full run (1 epoch)
+#   bash scripts/submit_rlvr_fast.sh --test                       # 1 step — measure step time
+#   bash scripts/submit_rlvr_fast.sh --model=Diamegs/PIT-4B-FT-201312 --output=checkpoints/pit-2013-fast
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -33,7 +33,7 @@ for arg in "$@"; do
     --n-test=*)  N_TEST="${arg#*=}" ;;
     --model=*)   MODEL_NAME="${arg#*=}" ;;
     --output=*)  OUTPUT_DIR="${arg#*=}" ;;
-    *) echo "Usage: bash submit_fast.sh [--test] [--n-test=N] [--model=...] [--output=...]"; exit 1 ;;
+    *) echo "Usage: bash scripts/submit_rlvr_fast.sh [--test] [--n-test=N] [--model=...] [--output=...]"; exit 1 ;;
   esac
 done
 
@@ -45,7 +45,7 @@ JOB_NAME="pit-rlvr-fast${TEST_FLAG:+-test}-${TIMESTAMP}"
 RUN_CMD="cd /home/bourgon/pit-stock-llm && \
   pip install -q --upgrade trl peft bitsandbytes && \
   export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && \
-  CUDA_VISIBLE_DEVICES=0 python -u rlvr_pipeline_fast.py \
+  CUDA_VISIBLE_DEVICES=0 python -u src/training/rlvr_fast.py \
   --model_name ${MODEL_NAME} \
   --data_path  ${DATA_PATH} \
   --output_dir ${OUTPUT_DIR}"

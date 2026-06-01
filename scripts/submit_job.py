@@ -6,21 +6,21 @@ Orchestrates the full PIT RLVR fine-tuning pipeline:
   Step 1 — preprocess_summarize : summarize earnings calls with vLLM
   Step 2 — pre_process          : merge with CRSP returns + map SIC → industry
   Step 3 — baseline             : zero-shot evaluation before fine-tuning
-  Step 4 — rlvr_pipeline        : GRPO fine-tuning
+  Step 4 — rlvr_single_gpu      : GRPO fine-tuning (single GPU)
 
 Full run:
-  python submit_job.py \
+  python scripts/submit_job.py \
     --model_name Diamegs/PIT-4B-FT-201912 \
     --output_dir checkpoints/pit-2019-rlvr
 
 Smoke test (10 samples, verify plumbing end-to-end):
-  python submit_job.py \
+  python scripts/submit_job.py \
     --model_name Diamegs/PIT-4B-FT-201912 \
     --output_dir checkpoints/pit-2019-rlvr \
     --test
 
 Skip steps already done:
-  python submit_job.py ... --skip_summarize --skip_preprocess
+  python scripts/submit_job.py ... --skip_summarize --skip_preprocess
 """
 
 import argparse
@@ -100,7 +100,7 @@ def main() -> None:
     # ── Step 1: Summarize ──────────────────────────────────────────────────────
     if not args.skip_summarize:
         cmd = [
-            py, "preprocess_summarize.py",
+            py, "src/preprocessing/preprocess_summarize.py",
             "--input",  args.raw_parquet,
             "--output", args.summarized_parquet,
         ]
@@ -113,7 +113,7 @@ def main() -> None:
     # ── Step 2: Merge with returns ────────────────────────────────────────────
     if not args.skip_preprocess:
         cmd = [
-            py, "pre_process.py",
+            py, "src/preprocessing/pre_process.py",
             "--input",   args.summarized_parquet,
             "--returns", args.returns_csv,
             "--output",  args.merged_parquet,
@@ -125,7 +125,7 @@ def main() -> None:
     # ── Step 3: Baseline ──────────────────────────────────────────────────────
     if not args.skip_baseline:
         cmd = [
-            py, "baseline.py",
+            py, "src/evaluation/baseline.py",
             "--model_name", local_model,
             "--data_path",  args.merged_parquet,
             "--output_csv", args.baseline_output,
@@ -138,14 +138,14 @@ def main() -> None:
 
     # ── Step 4: RLVR fine-tuning ──────────────────────────────────────────────
     cmd = [
-        py, "rlvr_pipeline.py",
+        py, "src/training/rlvr_single_gpu.py",
         "--model_name", local_model,
         "--data_path",  args.merged_parquet,
         "--output_dir", args.output_dir,
     ]
     if args.test:
         cmd += ["--test", "--n_test", str(args.n_test)]
-    run(cmd, "Step 4 — rlvr_pipeline (GRPO fine-tuning)")
+    run(cmd, "Step 4 — rlvr_single_gpu (GRPO fine-tuning)")
 
     print(f"\n[submit_job] Pipeline complete. Fine-tuned model saved to: {args.output_dir}")
 
